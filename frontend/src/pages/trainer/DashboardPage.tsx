@@ -18,6 +18,7 @@ import { motion } from 'framer-motion'
 import { fetchTrainerDashboard } from '@/api/trainer'
 import { useAuth } from '@/providers/AuthProvider'
 import { PortalShell } from '@/layouts/PortalShell'
+import { PrideFooter } from '@/components/PrideFooter'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
 import { getApiErrorMessage } from '@/lib/apiClient'
 
@@ -414,6 +415,7 @@ export default function TrainerDashboardPage() {
           </div>
         ) : null}
       </div>
+      <PrideFooter />
     </PortalShell>
   )
 }

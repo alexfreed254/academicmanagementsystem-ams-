@@ -18,6 +18,8 @@ import authRoutes from './routes/auth'
 import notificationRoutes from './routes/notifications'
 import trainerRoutes from './routes/trainer'
 import studentRoutes from './routes/student'
+import adminRoutes from './routes/admin'
+import roleRoutes from './routes/roles'
 import { err } from './lib/responses'
 import { ConfigError, envStatus } from './lib/env'
 import type { Env, AppVariables } from './types'
@@ -71,6 +73,8 @@ api.route('/', authRoutes)
 api.route('/', notificationRoutes)
 api.route('/', trainerRoutes)
 api.route('/', studentRoutes)
+api.route('/', adminRoutes)
+api.route('/', roleRoutes)
 app.route('/api/v1', api)
 
 app.notFound((c) => err(c, 'Not found.', 404, 'not_found'))

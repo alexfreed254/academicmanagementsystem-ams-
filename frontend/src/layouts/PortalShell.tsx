@@ -1,11 +1,11 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '@/providers/AuthProvider'
-import { getPortalNav, getPortalTitle } from '@/config/navigation'
+import { getPortalNav, getRoleTheme } from '@/config/navigation'
 import { fetchRecentNotifications } from '@/api/trainer'
-import clsx from 'clsx'
+import type { NavItem } from '@/types'
+import '@/styles/portal-shell.css'
 
 const legacyBase = (import.meta.env.VITE_LEGACY_ORIGIN as string | undefined) || ''
 const ZOOM_MIN = 0
@@ -15,254 +15,317 @@ const ZOOM_KEY = 'ttti_zoom'
 function readZoomPct() {
   const raw = parseFloat(localStorage.getItem(ZOOM_KEY) || '100')
   if (Number.isNaN(raw)) return 100
+  // Migrate legacy multiplier values (e.g. 1.1) to percentages.
   if (raw > 0 && raw <= 3) return Math.round(raw * 100)
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(raw)))
 }
 
 function applyPageZoom(pct: number) {
-  const level = pct / 100
-  const target =
-    (document.querySelector('.main-content') as HTMLElement | null) ||
-    (document.querySelector('main') as HTMLElement | null) ||
-    document.body
-  document.body.style.zoom = ''
-  target.style.zoom = String(level)
+  const target = document.querySelector('.main-content') as HTMLElement | null
+  if (!target) return
+  ;(target.style as CSSStyleDeclaration & { zoom?: string }).zoom = String(pct / 100)
   localStorage.setItem(ZOOM_KEY, String(pct))
 }
 
-function resolveHref(to: string, external?: boolean) {
-  if (external && legacyBase) return `${legacyBase.replace(/\/$/, '')}${to}`
-  if (external) return to
-  return to
+function resolveHref(item: NavItem) {
+  if (!item.external) return item.to
+  return legacyBase ? `${legacyBase.replace(/\/$/, '')}${item.to}` : item.to
 }
 
-export function PortalShell({
-  title,
-  children,
-}: {
-  title?: string
-  children: ReactNode
-}) {
+/** Africa/Nairobi clock, matching partials/digital_clock.html. */
+function DigitalClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const tz = 'Africa/Nairobi'
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(now)
+  const date = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(now)
+
+  return (
+    <div
+      className="ttti-digital-clock"
+      role="timer"
+      aria-live="off"
+      aria-label={`Current time ${time}, ${date} East Africa Time`}
+      title="East Africa Time (Nairobi)"
+    >
+      <span className="ttti-clock-time">{time}</span>
+      <span className="ttti-clock-date">{date}</span>
+      <span className="ttti-clock-tz">EAT</span>
+    </div>
+  )
+}
+
+function relativeTime(value: unknown): string {
+  if (!value) return ''
+  const then = new Date(String(value)).getTime()
+  if (Number.isNaN(then)) return ''
+  const diff = Math.max(0, Date.now() - then)
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
+
+export function PortalShell({ title, children }: { title?: string; children: ReactNode }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const [zoomPct, setZoomPct] = useState(() =>
-    typeof window === 'undefined' ? 100 : readZoomPct(),
-  )
+  const [zoomPct, setZoomPct] = useState(() => (typeof window === 'undefined' ? 100 : readZoomPct()))
+  const notifRef = useRef<HTMLDivElement>(null)
+
   const role = user?.role || 'trainer'
   const nav = getPortalNav(role)
+  const theme = getRoleTheme(role)
+
+  // The fixed official header only exists on portal routes.
+  useEffect(() => {
+    document.body.classList.add('portal-active')
+    return () => document.body.classList.remove('portal-active')
+  }, [])
 
   useEffect(() => {
     applyPageZoom(zoomPct)
-  }, [zoomPct])
+  }, [zoomPct, location.pathname])
+
+  useEffect(() => {
+    if (!notifOpen) return
+    function onDocClick(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false)
+    }
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [notifOpen])
 
   const notifs = useQuery({
     queryKey: ['notifications', 'recent'],
     queryFn: () => fetchRecentNotifications(8),
     enabled: Boolean(user),
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
   })
 
   const unread = notifs.data?.unread_count || 0
+  const items = notifs.data?.notifications || []
 
   async function onLogout() {
     await logout()
     navigate('/login', { replace: true })
   }
 
+  function closeOnMobile() {
+    if (window.innerWidth <= 768) setSidebarOpen(false)
+  }
+
   return (
-    <div className="min-h-screen bg-[var(--gray-50)]">
-      {/* Official header strip — matches existing institutional chrome */}
-      <header
-        className="fixed inset-x-0 top-0 z-[60] flex h-[var(--official-header-h)] items-center gap-3 border-b border-slate-200 bg-white px-4 shadow-sm"
-        style={{ height: 'var(--official-header-h)' }}
-      >
-        <img src="/ttti-logo.jpg" alt="Thika Technical" className="h-10 w-10 rounded-full object-contain" />
-        <div className="min-w-0">
-          <div className="truncate text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-display)' }}>
-            Thika Technical Training Institute
-          </div>
-          <div className="truncate text-xs text-slate-500">Academic Management System</div>
+    <div
+      style={
+        {
+          '--portal-accent': theme.accent,
+          '--portal-topbar-border': theme.topbarBorder,
+        } as React.CSSProperties
+      }
+    >
+      {/* partials/official_header.html */}
+      <header className="official-header" id="official-header" role="banner">
+        <img src="/KENYACOATOFARMS.png" alt="Government of Kenya" className="off-logo" />
+        <div className="off-center">
+          <div className="off-name">THIKA TECHNICAL TRAINING INSTITUTE</div>
+          <div className="off-sub">Academic Management System</div>
         </div>
+        <img src="/THIKATTILOGO.jpg" alt="TTTI Logo" className="off-logo" />
       </header>
 
-      <aside
-        className={clsx(
-          'fixed bottom-0 left-0 top-[var(--official-header-h)] z-50 flex w-[var(--sidebar-w)] flex-col text-white transition-transform duration-200',
-          'bg-[linear-gradient(180deg,#0a0f1e_0%,#0f1f40_45%,#0d1b35_100%)]',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
-        )}
+      <button
+        className="sidebar-toggle"
+        id="sidebarToggle"
+        type="button"
+        aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+        onClick={() => setSidebarOpen((v) => !v)}
       >
-        <div className="border-b border-white/10 px-4 py-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-300/90">
-            {getPortalTitle(role)}
-          </div>
-          <div className="mt-1 truncate text-sm font-semibold">{user?.full_name}</div>
-        </div>
+        <i className={sidebarOpen ? 'fas fa-times' : 'fas fa-bars'} />
+      </button>
+      <div
+        className={`sidebar-overlay${sidebarOpen ? ' open' : ''}`}
+        id="sidebarOverlay"
+        onClick={() => setSidebarOpen(false)}
+      />
 
-        <nav className="flex-1 overflow-y-auto px-2.5 py-3" aria-label="Portal menu">
-          {nav.map((section, si) => (
-            <div key={si} className="mb-2">
-              {section.title ? (
-                <div className="mb-1 mt-3 flex items-center gap-2 px-2.5 text-[9.5px] font-extrabold uppercase tracking-[1.8px] text-amber-400/85">
-                  {section.title}
-                  <span className="h-px flex-1 bg-gradient-to-r from-amber-400/35 to-white/5" />
-                </div>
-              ) : null}
-              <div className="flex flex-col gap-0.5">
-                {section.items.map((item) => {
-                  const href = resolveHref(item.to, item.external)
-                  if (item.external) {
-                    return (
-                      <a
-                        key={item.to}
-                        href={href}
-                        className="flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-[13.5px] font-medium text-white/85 hover:bg-amber-400/13 hover:text-white"
-                      >
-                        <span className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/10 text-[13px]">
-                          <i className={`fas fa-${item.icon}`} aria-hidden />
-                        </span>
-                        {item.label}
-                      </a>
-                    )
-                  }
-                  return (
+      <div className="dashboard-container">
+        <aside
+          className={`sidebar${sidebarOpen ? ' open' : ''}`}
+          id="sidebar"
+          style={{ background: theme.sidebar }}
+        >
+          <div className="sidebar-header">
+            <img src="/THIKATTILOGO.jpg" alt="TTTI Logo" />
+            <h2>
+              THIKA TECHNICAL
+              <br />
+              TRAINING INSTITUTE
+            </h2>
+            <div className="role-badge">
+              <i className={`fas fa-${theme.badgeIcon}`} aria-hidden /> {theme.badge}
+            </div>
+          </div>
+
+          <div className="sidebar-menu">
+            {nav.map((section, si) => (
+              <div key={si}>
+                {section.title ? <div className="menu-section">{section.title}</div> : null}
+                {section.items.map((item) =>
+                  item.external ? (
+                    <a key={item.to} href={resolveHref(item)} onClick={closeOnMobile}>
+                      <i className={`fas fa-${item.icon} fa-fw`} aria-hidden />
+                      <span className="nav-label">{item.label}</span>
+                    </a>
+                  ) : (
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      onClick={() => setSidebarOpen(false)}
-                      className={({ isActive }) =>
-                        clsx(
-                          'flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-[13.5px] font-medium text-white/85',
-                          isActive && 'border-l-2 border-amber-400 bg-amber-400/13 text-white',
-                        )
-                      }
+                      end={item.to.endsWith('/dashboard')}
+                      onClick={closeOnMobile}
+                      className={({ isActive }) => (isActive ? 'active' : undefined)}
                     >
-                      <span className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/10 text-[13px]">
-                        <i className={`fas fa-${item.icon}`} aria-hidden />
-                      </span>
-                      {item.label}
+                      <i className={`fas fa-${item.icon} fa-fw`} aria-hidden />
+                      <span className="nav-label">{item.label}</span>
                     </NavLink>
-                  )
-                })}
+                  ),
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="sidebar-footer">
+            {/* partials/sidebar_zoom.html */}
+            <div className="sidebar-zoom" role="group" aria-label="Page zoom">
+              <div className="sidebar-zoom-head">
+                <span className="sidebar-zoom-title">
+                  <i className="fas fa-search-plus" aria-hidden /> Zoom
+                </span>
+                <span className="sidebar-zoom-value">{zoomPct}%</span>
+              </div>
+              <input
+                className="sidebar-zoom-slider"
+                type="range"
+                min={ZOOM_MIN}
+                max={ZOOM_MAX}
+                step={5}
+                value={zoomPct}
+                aria-label="Zoom from 0 to 200 percent"
+                onChange={(e) => setZoomPct(Number(e.target.value))}
+              />
+              <div className="sidebar-zoom-scale">
+                <span>0%</span>
+                <span>100%</span>
+                <span>Max</span>
               </div>
             </div>
-          ))}
-        </nav>
-
-        <div className="shrink-0 border-t border-white/10 p-3">
-          <div
-            className="rounded-xl border border-amber-400/45 bg-slate-950/55 px-3 py-2.5 shadow-lg"
-            role="group"
-            aria-label="Page zoom"
-          >
-            <div className="mb-2 flex items-center justify-between text-[13px] font-extrabold text-white">
-              <span className="inline-flex items-center gap-2">
-                <i className="fas fa-search-plus text-amber-400" aria-hidden /> Zoom
-              </span>
-              <span className="min-w-[52px] rounded-full border border-amber-400/35 bg-amber-400/15 px-2 py-0.5 text-center text-[13px] font-extrabold text-amber-400">
-                {zoomPct}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min={ZOOM_MIN}
-              max={ZOOM_MAX}
-              step={5}
-              value={zoomPct}
-              aria-label="Zoom from 0 to 200 percent"
-              className="h-2.5 w-full cursor-pointer appearance-none rounded-full border border-white/20 bg-gradient-to-r from-slate-600 to-amber-400"
-              onChange={(e) => setZoomPct(Number(e.target.value))}
-            />
-            <div className="mt-2 flex justify-between text-[10px] font-extrabold uppercase tracking-wide text-white/70">
-              <span>0%</span>
-              <span>100%</span>
-              <span>Max</span>
-            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      {sidebarOpen ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          aria-label="Close menu"
-          onClick={() => setSidebarOpen(false)}
-        />
-      ) : null}
+        <div className="main-content">
+          <header className="topbar">
+            <div className="topbar-title">{title || 'Dashboard'}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <DigitalClock />
 
-      <div className="main-content pt-[var(--official-header-h)] lg:pl-[var(--sidebar-w)]">
-        <div
-          className="sticky top-[var(--official-header-h)] z-30 flex h-[var(--topbar-h)] items-center justify-between border-b-2 border-amber-100 bg-white px-4"
-        >
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 lg:hidden"
-              aria-label="Open menu"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <i className="fas fa-bars" />
-            </button>
-            <h1 className="text-base font-bold text-slate-900">{title || 'Dashboard'}</h1>
-          </div>
+              <div className="notif-wrapper" ref={notifRef}>
+                <button
+                  type="button"
+                  className="notification-bell"
+                  aria-label="Notifications"
+                  onClick={() => setNotifOpen((v) => !v)}
+                >
+                  <i className="fas fa-bell" />
+                  {unread > 0 ? (
+                    <span className="notification-badge">{unread > 99 ? '99+' : unread}</span>
+                  ) : null}
+                </button>
 
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <button
-                type="button"
-                className="relative grid h-9 w-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-50"
-                aria-label="Notifications"
-                onClick={() => setNotifOpen((v) => !v)}
-              >
-                <i className="fas fa-bell" />
-                {unread > 0 ? (
-                  <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                    {unread > 99 ? '99+' : unread}
-                  </span>
-                ) : null}
-              </button>
-              <AnimatePresence>
                 {notifOpen ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
-                    className="absolute right-0 top-[calc(100%+10px)] z-50 w-[340px] overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-xl"
-                  >
-                    <div className="border-b border-slate-100 px-4 py-3 text-sm font-bold">Notifications</div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {(notifs.data?.notifications || []).length === 0 ? (
-                        <div className="px-4 py-8 text-center text-sm text-slate-400">No notifications</div>
+                  <div className="notif-panel">
+                    <div className="notif-panel-hdr">
+                      <span className="notif-panel-ttl">Notifications</span>
+                      <button
+                        type="button"
+                        className="notif-mark-all-btn"
+                        onClick={() => void notifs.refetch()}
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                    <div className="notif-list">
+                      {notifs.isLoading ? (
+                        <div className="notif-loading">Loading…</div>
+                      ) : items.length === 0 ? (
+                        <div className="notif-empty">No notifications</div>
                       ) : (
-                        (notifs.data?.notifications || []).map((n) => (
-                          <div key={String(n.id)} className="border-b border-slate-50 px-4 py-3">
-                            <div className="text-sm font-semibold text-slate-900">{String(n.title || '')}</div>
-                            <div className="text-xs text-slate-500">{String(n.message || '')}</div>
-                          </div>
-                        ))
+                        items.map((n) => {
+                          const row = n as Record<string, unknown>
+                          const kind = String(row.type || row.notification_type || 'info')
+                          const isUnread = row.is_read === false
+                          return (
+                            <div
+                              key={String(row.id)}
+                              className={`notif-item${isUnread ? ' unread' : ''}`}
+                            >
+                              <span className={`notif-icon ${kind}`}>
+                                <i className="fas fa-bell" aria-hidden />
+                              </span>
+                              <span className="notif-body">
+                                <span className="notif-title">{String(row.title || '')}</span>
+                                <span className="notif-msg">{String(row.message || '')}</span>
+                                <span className="notif-time">{relativeTime(row.created_at)}</span>
+                              </span>
+                              {isUnread ? <span className="notif-dot" /> : null}
+                            </div>
+                          )
+                        })
                       )}
                     </div>
-                  </motion.div>
+                  </div>
                 ) : null}
-              </AnimatePresence>
+              </div>
+
+              <a
+                className="topbar-logout"
+                href="/login"
+                onClick={(e) => {
+                  e.preventDefault()
+                  void onLogout()
+                }}
+              >
+                <i className="fas fa-sign-out-alt" /> Sign Out
+              </a>
+
+              <div className="topbar-user">
+                <i className="fas fa-user-circle" />
+                {user?.full_name}
+              </div>
             </div>
+          </header>
 
-            <button
-              type="button"
-              onClick={() => void onLogout()}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700"
-              aria-label="Sign out"
-            >
-              <i className="fas fa-sign-out-alt" />
-              Sign Out
-            </button>
-          </div>
+          <main>{children}</main>
         </div>
-
-        <main className="min-h-[calc(100vh-var(--official-header-h)-var(--topbar-h))]">{children}</main>
       </div>
     </div>
   )
