@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/providers/AuthProvider'
 import { getRoleHome } from '@/config/navigation'
+import { getApiErrorMessage } from '@/lib/apiClient'
+import './LoginPage.css'
+
+const LOGO_URL = '/THIKATTILOGO.jpg'
 
 export default function LoginPage() {
   const { user, loading, loginStaff, loginStudent } = useAuth()
@@ -11,11 +14,20 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [admission, setAdmission] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [remember, setRemember] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (!loading && user) {
     return <Navigate to={getRoleHome(user.role)} replace />
+  }
+
+  function switchTab(type: 'staff' | 'student') {
+    setTab(type)
+    setError(null)
+    if (type === 'student') setEmail('')
+    else setAdmission('')
   }
 
   async function onSubmit(e: FormEvent) {
@@ -29,140 +41,298 @@ export default function LoginPage() {
           : await loginStudent(admission.trim(), password)
       navigate(getRoleHome(u.role), { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setError(getApiErrorMessage(err, 'Login failed'))
     } finally {
       setBusy(false)
     }
   }
 
+  const isStudent = tab === 'student'
+  const year = new Date().getFullYear()
+
   return (
-    <div className="grid min-h-screen place-items-center bg-[linear-gradient(135deg,#0f172a_0%,#1e3a8a_45%,#2563eb_100%)] p-6 text-slate-900">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="grid w-full max-w-[1160px] overflow-hidden rounded-[28px] border border-white/12 bg-white/5 shadow-[0_40px_90px_rgba(15,23,42,0.35)] md:grid-cols-2 md:min-h-[640px]"
-      >
-        <section className="flex flex-col justify-center gap-7 bg-[linear-gradient(180deg,#0f172a_0%,#1e3a8a_100%)] px-8 py-14 text-slate-50 md:px-12">
-          <div className="mx-auto grid h-[92px] w-[92px] place-items-center rounded-full bg-white shadow-xl">
-            <img src="/ttti-logo.jpg" alt="TTTI logo" className="h-[70px] w-[70px] object-contain" />
-          </div>
-          <h1 className="text-center text-[clamp(1.8rem,2.8vw,2.6rem)] font-bold uppercase leading-tight tracking-[0.04em]">
-            Thika Technical Training Institute
-          </h1>
-          <p className="mx-auto max-w-[520px] text-center text-base leading-8 text-slate-50/82">
-            Academic Management System — secure access for trainers, trainees, HODs, and examination offices.
-          </p>
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              ['12+', 'Portals'],
-              ['TVET', 'Focused'],
-              ['Live', 'Records'],
-            ].map(([k, v]) => (
-              <div
-                key={v}
-                className="rounded-[18px] border border-white/14 bg-white/10 px-4 py-5 text-center backdrop-blur"
-              >
-                <strong className="mb-2 block text-[1.9rem] font-extrabold">{k}</strong>
-                <small className="text-[0.8rem] uppercase tracking-[0.12em] text-slate-50/72">{v}</small>
+    <div className="login-page">
+      <div className="ambient" aria-hidden="true">
+        <div className="orb orb-a" />
+        <div className="orb orb-b" />
+      </div>
+
+      <div className="wrap">
+        <div className="login-shell">
+          <section className="hero-panel" aria-label="Institute branding">
+            <svg className="hex-pattern" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <pattern id="hex" x="0" y="0" width="52" height="60" patternUnits="userSpaceOnUse">
+                  <polygon
+                    points="26,2 50,15 50,45 26,58 2,45 2,15"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="1"
+                  />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#hex)" />
+            </svg>
+            <div className="hero-glow" aria-hidden="true" />
+
+            <div className="hero-brand">
+              <div className="logo-ring">
+                <img src={LOGO_URL} alt="Thika Technical Training Institute logo" />
               </div>
-            ))}
-          </div>
-        </section>
+              <div>
+                <h1>
+                  Thika Technical
+                  <br />
+                  Training Institute
+                </h1>
+                <p className="hero-eyebrow">Academic Management System</p>
+              </div>
+              <div className="hero-rule" aria-hidden="true" />
+              <p className="hero-copy">
+                A unified portal for academic records, scheduling, examinations, and institutional
+                services.
+              </p>
+            </div>
 
-        <section className="flex flex-col justify-center gap-7 bg-white px-8 py-12 md:px-12">
-          <div className="grid grid-cols-2 gap-2">
-            {(['staff', 'student'] as const).map((t) => (
+            <div className="stats">
+              <div className="stat">
+                <strong>9+</strong>
+                <small>User Roles</small>
+              </div>
+              <div className="stat">
+                <strong>1</strong>
+                <small>Platform</small>
+              </div>
+              <div className="stat">
+                <strong>24/7</strong>
+                <small>Access</small>
+              </div>
+            </div>
+
+            <div className="secure-badge">
+              <div className="secure-dot" aria-hidden="true" />
+              <span>Secure connection · SSL encrypted</span>
+            </div>
+          </section>
+
+          <section className="login-panel">
+            <div className="mobile-brand" aria-label="Institute branding">
+              <div className="logo-ring">
+                <img src={LOGO_URL} alt="Thika Technical Training Institute logo" />
+              </div>
+              <div>
+                <strong>Thika Technical Training Institute</strong>
+                <span>Academic Management System</span>
+              </div>
+            </div>
+
+            <div className="tabs" role="tablist" aria-label="Login type">
               <button
-                key={t}
                 type="button"
-                onClick={() => setTab(t)}
-                className={
-                  tab === t
-                    ? 'rounded-full border border-blue-300 bg-blue-50 px-3 py-3 text-[0.82rem] font-bold text-blue-700'
-                    : 'rounded-full border border-blue-100 bg-slate-50 px-3 py-3 text-[0.82rem] font-bold text-slate-600'
-                }
+                className={`tab${!isStudent ? ' active' : ''}`}
+                role="tab"
+                aria-selected={!isStudent}
+                onClick={() => switchTab('staff')}
               >
-                {t === 'staff' ? 'Staff Login' : 'Trainee Login'}
+                Staff / Admin
               </button>
-            ))}
-          </div>
+              <button
+                type="button"
+                className={`tab${isStudent ? ' active' : ''}`}
+                role="tab"
+                aria-selected={isStudent}
+                onClick={() => switchTab('student')}
+              >
+                Trainee
+              </button>
+            </div>
 
-          <div>
-            <h2 className="text-[clamp(1.8rem,2.4vw,2.5rem)] font-bold leading-none">Welcome back</h2>
-            <p className="mt-3 text-slate-500 leading-8">
-              {tab === 'staff'
-                ? 'Sign in with your institutional email and password.'
-                : 'Sign in with your admission number and password.'}
-            </p>
-          </div>
-
-          <form className="grid gap-[18px]" onSubmit={onSubmit}>
-            {tab === 'staff' ? (
-              <label className="grid gap-2.5 text-[0.95rem]">
-                <span className="font-bold text-slate-900">Email</span>
-                <span className="relative block">
-                  <i className="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-                  <input
-                    type="email"
-                    required
-                    autoComplete="username"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 py-4 pl-[46px] pr-[18px] outline-none focus:border-blue-400"
-                    placeholder="name@thikatti.ac.ke"
-                  />
-                </span>
-              </label>
-            ) : (
-              <label className="grid gap-2.5 text-[0.95rem]">
-                <span className="font-bold text-slate-900">Admission number</span>
-                <span className="relative block">
-                  <i className="fas fa-id-card absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-                  <input
-                    type="text"
-                    required
-                    autoComplete="username"
-                    value={admission}
-                    onChange={(e) => setAdmission(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 py-4 pl-[46px] pr-[18px] outline-none focus:border-blue-400"
-                    placeholder="e.g. TT/2024/001"
-                  />
-                </span>
-              </label>
-            )}
-
-            <label className="grid gap-2.5 text-[0.95rem]">
-              <span className="font-bold text-slate-900">Password</span>
-              <span className="relative block">
-                <i className="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-                <input
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 py-4 pl-[46px] pr-[18px] outline-none focus:border-blue-400"
-                  placeholder="Enter password"
-                />
-              </span>
-            </label>
+            <div className="heading">
+              <h2>{isStudent ? 'Trainee portal' : 'Welcome back'}</h2>
+              <p>
+                {isStudent
+                  ? 'Sign in using your admission number.'
+                  : 'Sign in with your institutional email address.'}
+              </p>
+            </div>
 
             {error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert">
-                {error}
+              <div className="alert alert-error" role="alert">
+                <span className="alert-icon" aria-hidden="true">
+                  ✕
+                </span>
+                <span>{error}</span>
               </div>
             ) : null}
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-2xl bg-[#1e5a9f] px-5 py-4 text-base font-bold text-white disabled:opacity-60"
-            >
-              {busy ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
-        </section>
-      </motion.div>
+            <form className="form" onSubmit={onSubmit} noValidate={false}>
+              {!isStudent ? (
+                <div className="field">
+                  <label htmlFor="email">Email Address</label>
+                  <div className="input-wrap">
+                    <span className="ico" aria-hidden="true">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="2" y="4" width="20" height="16" rx="2" />
+                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                      </svg>
+                    </span>
+                    <input
+                      id="email"
+                      type="email"
+                      name="email"
+                      placeholder="you@ttti.ac.ke/your@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="field">
+                  <label htmlFor="admissionNo">Admission Number</label>
+                  <div className="input-wrap">
+                    <span className="ico" aria-hidden="true">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="2" y="5" width="20" height="14" rx="2" />
+                        <circle cx="8" cy="12" r="2" />
+                        <path d="M12 12h6M12 9h3" />
+                      </svg>
+                    </span>
+                    <input
+                      id="admissionNo"
+                      type="text"
+                      name="admission_no"
+                      placeholder="A123456"
+                      value={admission}
+                      onChange={(e) => setAdmission(e.target.value)}
+                      autoComplete="username"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="field">
+                <label htmlFor="password">Password</label>
+                <div className="input-wrap has-toggle">
+                  <span className="ico" aria-hidden="true">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </span>
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="toggle-pw"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowPassword((v) => !v)}
+                  >
+                    {showPassword ? (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                        <line x1="2" y1="2" x2="22" y2="22" />
+                      </svg>
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="meta">
+                <label>
+                  <input
+                    type="checkbox"
+                    name="remember"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                  />{' '}
+                  Remember me
+                </label>
+                {isStudent ? (
+                  <Link to="/auth/forgot-password">Forgot Password?</Link>
+                ) : null}
+              </div>
+
+              <button type="submit" className="btn-login" disabled={busy}>
+                {busy ? 'Signing in…' : 'Sign In →'}
+              </button>
+            </form>
+
+            <p className="support">
+              Need help? Contact <a href="mailto:support@ttti.ac.ke">support@ttti.ac.ke</a>
+            </p>
+          </section>
+        </div>
+
+        <p className="bottom-tag">
+          © {year} Thika Technical Training Institute · All rights reserved
+        </p>
+      </div>
     </div>
   )
 }

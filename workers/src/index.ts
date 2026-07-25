@@ -25,14 +25,25 @@ const app = new Hono<{ Bindings: Env; Variables: AppVariables }>()
 
 app.use('*', secureHeaders())
 
-// CORS — allow-list from the ALLOWED_ORIGINS var (Pages URL + custom domain).
+// CORS — allow-list from ALLOWED_ORIGINS, plus same-origin (SPA + API on one Worker).
 app.use('*', async (c, next) => {
   const allowed = (c.env.ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean)
+  let selfOrigin = ''
+  try {
+    selfOrigin = new URL(c.req.url).origin
+  } catch {
+    /* ignore */
+  }
   const handler = cors({
-    origin: (origin) => (origin && allowed.includes(origin) ? origin : undefined),
+    origin: (origin) => {
+      if (!origin) return origin
+      if (allowed.includes(origin)) return origin
+      if (selfOrigin && origin === selfOrigin) return origin
+      return undefined
+    },
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-CSRFToken', 'X-CSRF-Token'],
     exposeHeaders: ['Content-Type'],

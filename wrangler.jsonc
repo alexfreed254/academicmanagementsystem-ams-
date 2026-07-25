@@ -1,18 +1,27 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "academic-management-system254",
+  "main": "workers/src/index.ts",
   "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": true,
-  // Self-contained build: `wrangler deploy` runs this first, so the SPA is
-  // compiled into frontend/dist even if the Cloudflare project has no build
-  // command. This stops the raw-source upload seen in earlier builds.
+  // Build the SPA, then install the API Worker deps so wrangler can bundle Hono.
   "build": {
-    "command": "npm --prefix frontend ci && npm --prefix frontend run build"
+    "command": "npm --prefix frontend ci && npm --prefix frontend run build && npm --prefix workers ci"
   },
+  // SPA + API on one Worker:
+  // - /api/* is handled by the Hono Worker first (fixes login 405)
+  // - everything else is served from frontend/dist (React Router SPA)
   "assets": {
     "directory": "./frontend/dist",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "SUPABASE_URL": "https://kbxaawuxlycetxifltxf.supabase.co",
+    "ALLOWED_ORIGINS": "http://localhost:5173,https://academic-management-system254.kasitetlawrence33.workers.dev",
+    "ENVIRONMENT": "production"
   },
   "observability": {
     "enabled": true

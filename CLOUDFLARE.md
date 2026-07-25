@@ -1,20 +1,25 @@
-# Cloudflare Workers Builds / Pages — monorepo note
+# Cloudflare Workers Builds — monorepo cheat sheet
 #
-# This repo is NOT a Python Worker. Ignore requirements.txt / runtime.txt /
-# Procfile for Cloudflare builds. Use the Node build below.
+# One Worker serves BOTH the React SPA and the Hono API:
+#   - /api/* → workers/src (Hono)
+#   - everything else → frontend/dist (Vite SPA)
 #
-# For the EXISTING project "academic-management-system254", set in the dashboard:
+# Dashboard settings for project "academic-management-system254":
 #
-#   Root directory:     /          (repo root — leave blank)
-#   Build command:      npm run build
+#   Root directory:     (blank — repo root)
+#   Build command:      (optional) npm run build
 #   Deploy command:     npx wrangler deploy
-#   Build watch paths:  frontend/**
 #
-# Optional build variables:
-#   VITE_API_BASE_URL = https://ttti-ams-api.<account>.workers.dev
-#   VITE_LEGACY_ORIGIN = <flask-url-if-any>
+# Required secrets (Workers → Settings → Variables and Secrets):
+#   SUPABASE_ANON_KEY
+#   SUPABASE_SERVICE_ROLE_KEY
+#   SESSION_SECRET          (long random string; can reuse Flask SECRET_KEY)
 #
-# For the API, create a SECOND Workers project with:
-#   Root directory:     workers
-#   Build command:      npm ci
-#   Deploy command:     npx wrangler deploy
+# Non-secret vars are already in wrangler.jsonc (SUPABASE_URL, ALLOWED_ORIGINS).
+#
+# After setting secrets, trigger a new deployment from latest main.
+# Do NOT click "Retry" on an old failed build — start a fresh deploy.
+#
+# Local:
+#   cd workers && npm ci && npx wrangler secret put SESSION_SECRET
+#   (or put secrets in workers/.dev.vars — see workers/.dev.vars.example)
