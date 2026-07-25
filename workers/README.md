@@ -1,19 +1,38 @@
-# TTTI AMS API — Cloudflare Worker
+# TTTI AMS API — Cloudflare Worker (Hono)
 
-Hono + TypeScript backend that replaces the Flask `/api/v1` JSON API.
+Hono + TypeScript backend for `/api/v1/*`. In production this source is bundled
+by the **repo-root** `wrangler.jsonc` together with the React SPA — not as a
+standalone `ttti-ams-api` Worker.
 
 ```
-Pages (React)  --Bearer JWT-->  this Worker  -->  Supabase
+Browser  --same origin-->  Cloudflare Worker
+  /api/*  → this Hono app (Bearer JWT)  →  Supabase
+  /*      → frontend/dist SPA
 ```
 
 ## Quick start
 
+Prefer the monorepo root:
+
 ```bash
-npm install
-cp .dev.vars.example .dev.vars   # fill in Supabase keys + SESSION_SECRET
+# repo root
+cp workers/.dev.vars.example workers/.dev.vars
 npm run check
-npx wrangler dev                 # http://127.0.0.1:8787
+npm run dev              # wrangler.dev from root wrangler.jsonc
+npm run deploy
 ```
+
+API-only local (optional):
+
+```bash
+cd workers
+npm install
+cp .dev.vars.example .dev.vars
+npm run check
+npx wrangler dev --config ../wrangler.jsonc   # use root config
+```
+
+`workers/wrangler.toml` is **retired** (split-topology leftover). Do not deploy it.
 
 ## Layout
 
@@ -22,12 +41,15 @@ src/
   index.ts              # Hono app, CORS, health
   types.ts              # Env, SessionUser, roles
   schemas.ts            # Zod validators
-  middleware/auth.ts    # requireAuth / requireRole / deptIsolationCheck
+  middleware/auth.ts    # requireAuth / requireRole
   lib/                  # supabase, session JWT, passwords, audit, dates, transcript
-  routes/               # auth, notifications, trainer, student
+  routes/               # auth, notifications, trainer, student, admin, roles, shared
 ```
 
-## Deploy
+## Runtime secrets
 
-See the root [`DEPLOYMENT.md`](../DEPLOYMENT.md). Secrets go through
-`wrangler secret put` — never commit `.dev.vars`.
+Set on the unified Worker (dashboard or `wrangler secret put` from repo root):
+
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SESSION_SECRET`

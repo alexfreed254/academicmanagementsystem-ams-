@@ -7,78 +7,55 @@ Production frontend for the Thika Technical Academic Management System.
 - React 18 + Vite
 - React Router (lazy route-level code splitting)
 - TanStack Query
-- Axios (`withCredentials` session cookies)
+- Axios (**Bearer** session JWT — `withCredentials: false`)
 - Tailwind CSS 4
 - Framer Motion (selective)
-- Chart.js / Recharts
+- Chart.js
 - Socket.IO client (opt-in via `VITE_SOCKET_URL`)
-- React Player (available for media screens)
 
 ## Architecture
 
 ```
-React + Vite
+React + Vite (frontend/)
   → React Router (lazy portals)
   → TanStack Query
-  → Axios (`src/lib/apiClient.ts`)
-  → Flask `/api/v1/*`
+  → Axios (`src/lib/apiClient.ts`)  same-origin /api/v1/*
+  → Cloudflare Worker (Hono)        root wrangler.jsonc
   → Supabase Auth + PostgreSQL + Storage
 ```
 
-Existing Jinja portals remain available. This SPA is migrated incrementally
-**without changing the visual design language** (same tokens, sidebar, login layout).
+Production is **one Worker** that serves this SPA from `frontend/dist` and the
+API from `workers/src`. Leave `VITE_API_BASE_URL` empty. Optional
+`VITE_LEGACY_ORIGIN` points PDF/biometric exports at a Flask host only.
+
+Do **not** deploy `frontend/wrangler.jsonc` — it is retired (static-only leftover).
 
 ## Local development
 
-1. Start Flask API (repo root):
+1. Worker API + SPA assets (repo root):
 
 ```bash
-pip install -r requirements.txt
-flask --app app run -p 5000
+cp workers/.dev.vars.example workers/.dev.vars
+npm run dev          # wrangler dev — http://127.0.0.1:8787
 ```
 
-2. Start Vite (this folder):
+2. Or Vite-only with API proxy (this folder):
 
 ```bash
 npm install
-npm run dev
+npm run dev          # proxies /api → http://127.0.0.1:8787 (see vite.config.ts)
 ```
 
-Open `http://localhost:5173`. Vite proxies `/api` and `/static` to Flask.
-
-## Environment
-
-Copy `.env.example` to `.env`:
-
-| Variable | Purpose |
-|---|---|
-| `VITE_API_BASE_URL` | Empty in local (use Vite proxy). Production: Flask origin e.g. `https://api.example.com` |
-| `VITE_LEGACY_ORIGIN` | Flask origin for not-yet-migrated pages |
-| `VITE_SOCKET_URL` | Optional Socket.IO server |
-
-Flask side (repo root `.env`):
-
-| Variable | Purpose |
-|---|---|
-| `SPA_ORIGINS` | Comma-separated SPA origins (default localhost:5173) |
-| `SPA_CROSS_SITE` | `true` when SPA and API are on different HTTPS domains |
-
-## Production build
+## Build
 
 ```bash
-npm run build
+npm run build        # output: ./dist  (root wrangler assets.directory)
 ```
 
-Deploy `dist/` to a static host (Render Static Site, Netlify, etc.). Point
-`VITE_API_BASE_URL` at the Flask API. Enable CORS via `SPA_ORIGINS`.
+## Env
 
-## Migration status
-
-| Area | Status |
+| Variable | Purpose |
 |---|---|
-| Auth login (staff + trainee) | Done |
-| Trainer dashboard (parity UI) | Done |
-| Other trainer screens | Placeholder → legacy Flask |
-| Other portals | Scaffolded routing / next increments |
-
-Jinja routes are **not** removed. Do not delete templates until each screen is ported and verified.
+| `VITE_API_BASE_URL` | Leave empty for same-origin Worker `/api` |
+| `VITE_LEGACY_ORIGIN` | Optional Flask origin for PDF / biometric links |
+| `VITE_SOCKET_URL` | Optional realtime (off by default) |

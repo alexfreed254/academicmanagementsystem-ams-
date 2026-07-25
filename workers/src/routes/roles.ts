@@ -1125,4 +1125,193 @@ roles.get(
   },
 )
 
+roles.get('/examination-officer/exam-bookings/:id', requireRole('examination_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const id = c.req.param('id')
+  const { data } = await db
+    .from('exam_bookings')
+    .select(
+      '*, units(name, code), ' +
+        'user_profiles!exam_bookings_student_id_fkey(full_name, admission_no), ' +
+        'approver:user_profiles!exam_bookings_approved_by_fkey(full_name)',
+    )
+    .eq('id', id)
+    .maybeSingle()
+  if (!data) return err(c, 'Booking not found.', 404)
+  return ok(c, { booking: data })
+})
+
+roles.get('/liaison-officer/attachments/:id', requireRole('liaison_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const id = c.req.param('id')
+  const { data } = await db
+    .from('industrial_attachments')
+    .select(
+      '*, user_profiles!industrial_attachments_student_id_fkey(full_name, admission_no, mobile_number, departments(name)), companies(*)',
+    )
+    .eq('id', id)
+    .maybeSingle()
+  if (!data) return err(c, 'Placement not found.', 404)
+  const row = data as Row
+  let trainerName = ''
+  if (row.institute_trainer_id) {
+    const { data: tr } = await db
+      .from('user_profiles')
+      .select('full_name')
+      .eq('id', row.institute_trainer_id as string)
+      .maybeSingle()
+    trainerName = (tr as Row | null)?.full_name as string ?? ''
+  }
+  return ok(c, { attachment: { ...row, trainer_name: trainerName } })
+})
+
+roles.get('/liaison-officer/attachments/:id/grade-form', requireRole('liaison_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const id = c.req.param('id')
+  const { data: att } = await db
+    .from('industrial_attachments')
+    .select('*, user_profiles!industrial_attachments_student_id_fkey(full_name, admission_no, department_id)')
+    .eq('id', id)
+    .maybeSingle()
+  if (!att) return err(c, 'Attachment not found.', 404)
+  const { data: grade } = await db.from('attachment_grades').select('*').eq('attachment_id', id).maybeSingle()
+  return ok(c, { attachment: att, grade: grade ?? null })
+})
+
+roles.get('/cdacc-verifier/trainees/:student_id', requireRole('cdacc_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const studentId = c.req.param('student_id')
+  const { data: student } = await db
+    .from('user_profiles')
+    .select('id, full_name, admission_no, email, mobile_number, departments(name), classes(name)')
+    .eq('id', studentId)
+    .maybeSingle()
+  if (!student) return err(c, 'Trainee not found.', 404)
+
+  const { data: fmRows } = await db
+    .from('formative_marks')
+    .select('assessment_id, marks_obtained')
+    .eq('student_id', studentId)
+  const faIds = ((fmRows ?? []) as Row[]).map((m) => m.assessment_id as string).filter(Boolean)
+  let marksByType: Record<string, Row[]> = {}
+  if (faIds.length) {
+    const { data: fas } = await db
+      .from('formative_assessments')
+      .select('id, assessment_type, assessment_name, max_marks, year, term, units(name, code), classes(name)')
+      .in('id', faIds)
+    const faMap = new Map(((fas ?? []) as Row[]).map((fa) => [fa.id as string, fa]))
+    for (const m of (fmRows ?? []) as Row[]) {
+      const fa = faMap.get(m.assessment_id as string)
+      if (!fa) continue
+      const atype = String(fa.assessment_type ?? 'other').toLowerCase()
+      const mo = m.marks_obtained as number | null
+      const mm = Number(fa.max_marks ?? 100) || 100
+      const pct = mo != null && mm ? Math.round((Number(mo) / mm) * 1000) / 10 : null
+      const grade =
+        pct == null ? 'N/A' : pct >= 80 ? 'M' : pct >= 65 ? 'P' : pct >= 50 ? 'C' : 'NYC'
+      if (!marksByType[atype]) marksByType[atype] = []
+      marksByType[atype].push({
+        name: fa.assessment_name,
+        unit: (fa.units as Row | undefined)?.name,
+        code: (fa.units as Row | undefined)?.code,
+        marks_obtained: mo,
+        max_marks: mm,
+        percentage: pct,
+        grade,
+        year: fa.year,
+        term: fa.term,
+      })
+    }
+  }
+
+  const { data: atts } = await db
+    .from('industrial_attachments')
+    .select('id, status, start_date, end_date, companies(name)')
+    .eq('student_id', studentId)
+    .order('created_at', { ascending: false })
+    .limit(5)
+  const attIds = ((atts ?? []) as Row[]).map((a) => a.id as string)
+  let attGrades: Row[] = []
+  if (attIds.length) {
+    const { data: grades } = await db.from('attachment_grades').select('*').in('attachment_id', attIds)
+    const gMap = new Map(((grades ?? []) as Row[]).map((g) => [g.attachment_id as string, g]))
+    attGrades = ((atts ?? []) as Row[]).map((a) => ({ attachment: a, grade: gMap.get(a.id as string) ?? null }))
+  }
+
+  const [{ data: uploads }, { data: logbook }] = await Promise.all([
+    db.from('mentoring_tool_uploads').select('*').eq('student_id', studentId).order('uploaded_at', { ascending: false }),
+    db.from('digital_logbook').select('*').eq('student_id', studentId).order('log_date', { ascending: false }).limit(100),
+  ])
+
+  return ok(c, {
+    student,
+    marks_by_type: marksByType,
+    att_grades: attGrades,
+    uploads: uploads ?? [],
+    logbook: logbook ?? [],
+  })
+})
+
+roles.get('/internal-verifier/attachments/:id', requireRole('internal_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const id = c.req.param('id')
+  const { data } = await db
+    .from('industrial_attachments')
+    .select(
+      '*, user_profiles!industrial_attachments_student_id_fkey(full_name, admission_no, mobile_number), ' +
+        'units(name, code), companies(name, address, contact_person, contact_phone)',
+    )
+    .eq('id', id)
+    .maybeSingle()
+  if (!data) return err(c, 'Attachment not found.', 404)
+  const [{ data: competencies }, { data: logbooks }] = await Promise.all([
+    db.from('competency_tracking').select('*, units(name, code)').eq('attachment_id', id),
+    db.from('digital_logbook').select('*').eq('attachment_id', id).order('log_date', { ascending: false }),
+  ])
+  return ok(c, { attachment: data, competencies: competencies ?? [], logbooks: logbooks ?? [] })
+})
+
+roles.get('/dept-admin/applications', requireRole('dept_admin'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  if (!user.department_id) return err(c, 'No department assigned.', 400)
+  const { data } = await db
+    .from('course_applications')
+    .select('*')
+    .eq('department_id', user.department_id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+roles.get('/dept-admin/trainees-documents/:student_id', requireRole('dept_admin'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const studentId = c.req.param('student_id')
+  if (!user.department_id) return err(c, 'No department assigned.', 400)
+
+  const { data: student } = await db
+    .from('user_profiles')
+    .select('id, full_name, admission_no, email, mobile_number, department_id')
+    .eq('id', studentId)
+    .maybeSingle()
+  if (!student || (student as Row).department_id !== user.department_id) {
+    return err(c, 'Student not found in your department.', 404)
+  }
+
+  const { data: enr } = await db
+    .from('enrollments')
+    .select('classes(name)')
+    .eq('student_id', studentId)
+    .limit(1)
+  const className = String((((enr ?? []) as Row[])[0]?.classes as Row | undefined)?.name ?? '')
+
+  const { data: documents } = await db
+    .from('trainee_documents')
+    .select('*')
+    .eq('student_id', studentId)
+    .order('created_at', { ascending: false })
+
+  return ok(c, { student, class_name: className, documents: documents ?? [] })
+})
+
 export default roles

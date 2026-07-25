@@ -1,5 +1,9 @@
 # Cloudflare Deployment Guide — TTTI Academic Management System
 
+> **Production topology (current):** one Cloudflare Worker from repo-root `wrangler.jsonc`.
+> SPA + API share the same origin. See `CLOUDFLARE.md` for the short cheat sheet.
+> The older “Pages + separate API Worker” diagrams below are historical — do not deploy that split.
+
 This guide takes the inventoried Flask + React system to the target architecture:
 
 ```
@@ -7,15 +11,24 @@ Users
   ↓
 Cloudflare (DNS · SSL/TLS · CDN · WAF · DDoS)
   ↓
-Cloudflare Pages  — React + Vite + TypeScript (frontend/)
-  ↓ HTTPS  Authorization: Bearer <session JWT>
-Cloudflare Workers — Hono + TypeScript API (workers/)
-  ↓ service-role key (secret)
+Cloudflare Worker — React SPA (frontend/dist) + Hono API (workers/src)
+  ├─ /api/*  → Hono   Authorization: Bearer <session JWT>
+  └─ /*      → SPA fallback (index.html)
+  ↓ service-role key (runtime secret)
 Supabase — PostgreSQL + Auth + Storage + RLS
 ```
 
 Read `MIGRATION_INVENTORY.md` first — it lists every Flask route, table, auth flow,
-and the blockers that keep PDFs / biometrics / Jinja portals on a legacy origin for now.
+and the blockers that keep PDFs / biometrics / Jinja exporters on an optional legacy origin.
+
+**Deploy from repo root only:**
+
+```bash
+npm run deploy          # runs wrangler deploy using root wrangler.jsonc
+# or: npx wrangler deploy
+```
+
+GitHub Actions: `.github/workflows/deploy.yml` (unified). Retired: `deploy-pages.yml`, `deploy-workers.yml`.
 
 ---
 
@@ -35,9 +48,8 @@ and the blockers that keep PDFs / biometrics / Jinja portals on a legacy origin 
 2. Note your **Account ID** (Overview → Account ID) — needed for CI secrets.
 3. Create an API token:
    - My Profile → API Tokens → Create Token
-   - Use the **Edit Cloudflare Workers** template, and also enable:
-     - Account → Cloudflare Pages → Edit
-     - Zone → Zone Settings / DNS / Zone → Read/Edit (for the custom domain zone)
+   - Use the **Edit Cloudflare Workers** template (Pages Edit is not required for the unified Worker)
+   - Zone → Zone Settings / DNS / Zone → Read/Edit (for the custom domain zone)
    - Save the token somewhere safe — it is shown once.
 
 ---
@@ -64,21 +76,56 @@ enforces RBAC + department isolation in TypeScript (same model as Flask).
 
 ---
 
-## 3. Cloudflare Workers setup (API)
+## 3. Unified Worker setup (SPA + API)
 
 ```bash
-cd workers
-npm install
-cp .dev.vars.example .dev.vars
-# Edit .dev.vars with real Supabase keys + a long SESSION_SECRET
-# Generate: openssl rand -hex 32   (or  python -c "import secrets;print(secrets.token_hex(32))")
+# From repo root
+cp workers/.dev.vars.example workers/.dev.vars
+# Edit workers/.dev.vars with real Supabase keys + a long SESSION_SECRET
+# Generate: openssl rand -hex 32
+
+npm run check          # TypeScript (workers)
+npm run build          # frontend/dist only (optional; wrangler build also runs it)
+npm run deploy         # wrangler deploy — builds SPA then publishes Worker
 ```
 
-Local run:
+Set **runtime** secrets on the Worker (dashboard or CLI):
 
 ```bash
-npm run check          # TypeScript
-npx wrangler dev       # http://127.0.0.1:8787
+npx wrangler secret put SUPABASE_ANON_KEY
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+npx wrangler secret put SESSION_SECRET
+```
+
+Verify:
+
+```bash
+curl https://<your-worker>.workers.dev/api/health
+# ready: true
+```
+
+Local:
+
+```bash
+npm run dev            # wrangler dev at repo root (SPA assets + /api)
+```
+
+> **Do not** deploy `frontend/wrangler.jsonc` or `workers/wrangler.toml` — they are retired.
+
+---
+
+## 3b. Historical note — split Pages + API (obsolete)
+
+The sections that previously described Cloudflare Pages (`ttti-ams`) plus a separate
+API Worker (`ttti-ams-api`) are **obsolete**. Keeping a short note here so older
+runbooks are not followed by mistake:
+
+- Leave `VITE_API_BASE_URL` **empty** on the unified Worker (same-origin `/api`).
+- Optional `VITE_LEGACY_ORIGIN` only if a Flask host still serves PDF/biometric exports.
+
+For DNS, WAF, custom domains, and rollback detail that still apply to the Worker,
+continue with the remaining sections below (treat “Pages URL” as your Worker URL /
+custom domain).npx wrangler dev       # http://127.0.0.1:8787
 curl http://127.0.0.1:8787/api/health
 ```
 

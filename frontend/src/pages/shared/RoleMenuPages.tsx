@@ -1,11 +1,13 @@
+import { deleteAction, postAction } from '@/api/mutations'
 import { ApiTablePage, StatusPill, cell } from '@/pages/shared/ApiTablePage'
+import { InteractiveTablePage } from '@/pages/shared/InteractiveTablePage'
 import type { Row } from '@/api/portals'
 
 /** Thin wrappers for specialist-role sidebar destinations. */
 
 export function ExamOfficerBookingsPage() {
   return (
-    <ApiTablePage
+    <InteractiveTablePage
       title="Approved Exam Bookings"
       subtitle="Confirm HOD-approved Form 1A bookings for the examination office."
       endpoint="/examination-officer/exam-bookings"
@@ -39,6 +41,14 @@ export function ExamOfficerBookingsPage() {
           render: (r) => <StatusPill value={r.status} />,
         },
       ]}
+      actions={[
+        {
+          label: 'Confirm',
+          tone: 'primary',
+          when: (r) => String(r.status || '') === 'approved',
+          run: (row) => postAction(`/examination-officer/exam-bookings/${row.id}/confirm`),
+        },
+      ]}
     />
   )
 }
@@ -66,7 +76,7 @@ export function ExamOfficerMarksPage() {
 
 export function WorkshopInventoryPage() {
   return (
-    <ApiTablePage
+    <InteractiveTablePage
       title="Workshop Inventory"
       subtitle="Tools and equipment registered for your department workshop."
       endpoint="/workshop-technician/inventory"
@@ -77,6 +87,32 @@ export function WorkshopInventoryPage() {
         { key: 'quantity', label: 'Qty' },
         { key: 'condition', label: 'Condition', render: (r) => <StatusPill value={r.condition} /> },
         { key: 'location', label: 'Location' },
+      ]}
+      createLabel="Add item"
+      createFields={[
+        { name: 'item_name', label: 'Item name', required: true },
+        { name: 'category', label: 'Category' },
+        { name: 'quantity', label: 'Quantity', type: 'number', required: true },
+        {
+          name: 'condition',
+          label: 'Condition',
+          type: 'select',
+          required: true,
+          options: [
+            { value: 'good', label: 'Good' },
+            { value: 'fair', label: 'Fair' },
+            { value: 'poor', label: 'Poor' },
+            { value: 'damaged', label: 'Damaged' },
+          ],
+        },
+        { name: 'location', label: 'Location' },
+      ]}
+      actions={[
+        {
+          label: 'Delete',
+          tone: 'danger',
+          run: (row) => deleteAction(`/workshop-technician/inventory/${row.id}`),
+        },
       ]}
     />
   )
@@ -113,7 +149,7 @@ export function IndustryMentorTraineesPage() {
 
 export function IndustryMentorLogbookPage() {
   return (
-    <ApiTablePage
+    <InteractiveTablePage
       title="Logbook Review"
       endpoint="/industry-mentor/logbook"
       rowsKey="entries"
@@ -127,13 +163,29 @@ export function IndustryMentorLogbookPage() {
           render: (r) => <StatusPill value={r.mentor_approval_status || r.status} />,
         },
       ]}
+      actions={[
+        {
+          label: 'Approve',
+          tone: 'primary',
+          when: (r) => String(r.mentor_approval_status || r.status || '') === 'pending',
+          run: (row) => postAction(`/industry-mentor/logbook/${row.id}/approve`),
+        },
+        {
+          label: 'Reject',
+          tone: 'danger',
+          requireComment: true,
+          when: (r) => String(r.mentor_approval_status || r.status || '') === 'pending',
+          run: (row, comment) =>
+            postAction(`/industry-mentor/logbook/${row.id}/reject`, { comments: comment }),
+        },
+      ]}
     />
   )
 }
 
 export function IndustryMentorCompetencyPage() {
   return (
-    <ApiTablePage
+    <InteractiveTablePage
       title="Competency Assessment"
       endpoint="/industry-mentor/competency"
       rowsKey="competencies"
@@ -145,6 +197,14 @@ export function IndustryMentorCompetencyPage() {
           key: 'verification_status',
           label: 'Status',
           render: (r) => <StatusPill value={r.verification_status} />,
+        },
+      ]}
+      actions={[
+        {
+          label: 'Verify',
+          tone: 'primary',
+          when: (r) => String(r.verification_status || '') !== 'verified',
+          run: (row) => postAction(`/industry-mentor/competency/${row.id}/verify`),
         },
       ]}
     />
@@ -241,7 +301,7 @@ export function LiaisonPeriodsPage() {
 
 export function LiaisonAttachmentsPage() {
   return (
-    <ApiTablePage
+    <InteractiveTablePage
       title="Placement Reviews"
       endpoint="/liaison-officer/attachments"
       rowsKey="attachments"
@@ -250,6 +310,22 @@ export function LiaisonAttachmentsPage() {
         { key: 'companies.name', label: 'Company', render: (r) => cell(r, 'companies.name') },
         { key: 'units.name', label: 'Unit', render: (r) => cell(r, 'units.name') },
         { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
+      ]}
+      actions={[
+        {
+          label: 'Approve',
+          tone: 'primary',
+          when: (r) => ['pending', 'submitted'].includes(String(r.status || '')),
+          run: (row) => postAction(`/liaison-officer/attachments/${row.id}/approve`),
+        },
+        {
+          label: 'Reject',
+          tone: 'danger',
+          requireComment: true,
+          when: (r) => ['pending', 'submitted'].includes(String(r.status || '')),
+          run: (row, comment) =>
+            postAction(`/liaison-officer/attachments/${row.id}/reject`, { comments: comment }),
+        },
       ]}
     />
   )

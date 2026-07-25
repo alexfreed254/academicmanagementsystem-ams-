@@ -8,15 +8,16 @@ A full-stack web application for managing academic operations at Thika Technical
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18 + Vite + TypeScript · Tailwind CSS · hosted on **Cloudflare Pages** |
-| Backend API | **Cloudflare Workers** · Hono · Zod · TypeScript (`workers/`) |
+| Edge app | **One Cloudflare Worker** — React SPA (`frontend/dist`) + Hono API (`workers/`) |
+| Frontend | React 18 + Vite + TypeScript · Tailwind CSS |
+| Backend API | Hono · Zod · TypeScript on Cloudflare Workers |
 | Database | Supabase (PostgreSQL + Row Level Security) |
-| Auth | Supabase Auth (JWT) for staff · Werkzeug-compatible hashes for students · session JWT on Workers |
+| Auth | Supabase Auth (JWT) for staff · Werkzeug-compatible hashes for students · **Bearer session JWT** on Workers |
 | Storage | Supabase Storage (PDFs, images, evidence files) |
 | Edge | Cloudflare DNS · CDN · SSL/TLS · WAF · DDoS |
-| Legacy (phase 2) | Flask Jinja portals + ReportLab PDFs + biometric device API (optional `VITE_LEGACY_ORIGIN`) |
+| Legacy (optional) | Flask Jinja / ReportLab PDFs / biometrics via `VITE_LEGACY_ORIGIN` |
 
-See [`MIGRATION_INVENTORY.md`](MIGRATION_INVENTORY.md) for the full audit and [`DEPLOYMENT.md`](DEPLOYMENT.md) for Cloudflare setup, secrets, DNS, WAF, CI/CD, and rollback.
+See [`CLOUDFLARE.md`](CLOUDFLARE.md) for the deploy cheat sheet, [`MIGRATION_INVENTORY.md`](MIGRATION_INVENTORY.md) for the Flask audit, and [`DEPLOYMENT.md`](DEPLOYMENT.md) for secrets and DNS.
 
 ## System Architecture
 
@@ -25,18 +26,19 @@ Users
   ↓
 Cloudflare (DNS · SSL/TLS · CDN · WAF · DDoS)
   ↓
-Cloudflare Pages — React + Vite SPA (frontend/)
-  ↓ HTTPS  Authorization: Bearer <session JWT>
-Cloudflare Workers — Hono API (workers/)  /api/v1/*
+Cloudflare Worker  academic-management-system254
+  ├─ /api/*          → Hono (workers/src)  Authorization: Bearer <session JWT>
+  └─ /*              → React SPA (frontend/dist)
   ↓
 Supabase — PostgreSQL + Auth + Storage + RLS
 
-Optional legacy:
-  Jinja portals / PDFs / biometrics ──► Flask on Render (VITE_LEGACY_ORIGIN)
+Optional legacy (PDF / biometrics only):
+  VITE_LEGACY_ORIGIN ──► Flask host
 ```
 
-All application data lives in Supabase. The production API for the React SPA is the
-Cloudflare Worker. Jinja HTML portals remain available during the incremental SPA migration.
+Production source of truth is **repo-root `wrangler.jsonc`**. Do not deploy `frontend/wrangler.jsonc` or `workers/wrangler.toml` — those are retired split-topology leftovers.
+
+All application data lives in Supabase. The React SPA talks same-origin to `/api/v1/*` on the Worker.
 
 ---
 

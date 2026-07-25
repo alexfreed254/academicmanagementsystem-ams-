@@ -21,6 +21,9 @@ import studentRoutes from './routes/student'
 import adminRoutes from './routes/admin'
 import roleRoutes from './routes/roles'
 import sharedRoutes from './routes/shared'
+import mutationRoutes from './routes/mutations'
+import publicRoutes from './routes/public'
+import printRoutes from './routes/print'
 import { err } from './lib/responses'
 import { ConfigError, envStatus } from './lib/env'
 import type { Env, AppVariables } from './types'
@@ -51,7 +54,7 @@ app.use('*', async (c, next) => {
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-CSRFToken', 'X-CSRF-Token'],
     exposeHeaders: ['Content-Type'],
-    credentials: true,
+    credentials: false,
     maxAge: 86400,
   })
   return handler(c, next)
@@ -77,6 +80,9 @@ api.route('/', studentRoutes)
 api.route('/', adminRoutes)
 api.route('/', roleRoutes)
 api.route('/', sharedRoutes)
+api.route('/', mutationRoutes)
+api.route('/', publicRoutes)
+api.route('/', printRoutes)
 app.route('/api/v1', api)
 
 app.notFound((c) => err(c, 'Not found.', 404, 'not_found'))

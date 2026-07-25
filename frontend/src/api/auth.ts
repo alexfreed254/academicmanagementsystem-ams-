@@ -69,5 +69,36 @@ export async function updateProfile(payload: { full_name: string; mobile_number:
 }
 
 export async function changePassword(current_password: string, new_password: string) {
-  await api.post('/api/v1/auth/profile/password', { current_password, new_password })
+  await api.post('/api/v1/auth/change-password', { current_password, new_password })
+}
+
+type ForgotPasswordPayload =
+  | { login_type: 'staff'; email: string }
+  | { login_type: 'student'; admission_no?: string }
+
+type ForgotPasswordResponse = {
+  ok: boolean
+  data: { info?: string; message?: string; sent?: boolean }
+}
+
+export async function forgotPassword(payload: ForgotPasswordPayload) {
+  const { data } = await api.post<ForgotPasswordResponse>('/api/v1/auth/forgot-password', payload)
+  return data.data
+}
+
+type StudentRegisterPayload = {
+  admission_no: string
+  full_name: string
+  email: string
+  password: string
+}
+
+type StudentRegisterResponse = {
+  ok: boolean
+  data: { registered: boolean; message: string }
+}
+
+export async function studentRegister(payload: StudentRegisterPayload) {
+  const { data } = await api.post<StudentRegisterResponse>('/api/v1/auth/student/register', payload)
+  return data.data
 }

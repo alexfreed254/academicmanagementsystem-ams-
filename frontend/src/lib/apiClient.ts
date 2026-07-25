@@ -55,3 +55,18 @@ export function getApiErrorMessage(error: unknown, fallback = 'Something went wr
   if (error instanceof Error && error.message) return error.message
   return fallback
 }
+
+/**
+ * Absolute URL for Flask-only PDF / biometric / Jinja exports.
+ * Returns null when VITE_LEGACY_ORIGIN is unset so the SPA does not
+ * pretend a Cloudflare Worker route exists for those downloads.
+ */
+export function legacyHref(path: string): string | null {
+  const base = (import.meta.env.VITE_LEGACY_ORIGIN as string | undefined)?.replace(/\/$/, '') || ''
+  if (!base) return null
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+export function hasLegacyOrigin(): boolean {
+  return Boolean((import.meta.env.VITE_LEGACY_ORIGIN as string | undefined)?.trim())
+}

@@ -1,0 +1,52 @@
+name: Deploy Cloudflare Worker (SPA + API)
+
+# Single production topology — repo-root wrangler.jsonc:
+#   /api/*        → Hono Worker
+#   everything else → frontend/dist (React SPA)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'workers/**'
+      - 'wrangler.jsonc'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+            workers/package-lock.json
+
+      - name: Install root Wrangler
+        run: npm ci
+
+      - name: Typecheck Workers API
+        run: npm --prefix workers ci && npm --prefix workers run check
+
+      - name: Deploy unified Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Root wrangler.jsonc build.command builds frontend/dist then installs workers deps
+          command: deploy
+        env:
+          # Optional: only if a separate Flask legacy host still serves PDFs / biometrics
+          VITE_LEGACY_ORIGIN: ${{ vars.VITE_LEGACY_ORIGIN }}

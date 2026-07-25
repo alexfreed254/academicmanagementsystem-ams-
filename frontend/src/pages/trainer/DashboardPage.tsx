@@ -365,12 +365,12 @@ export default function TrainerDashboardPage() {
                           {a.uploaded_at ? String(a.uploaded_at).slice(0, 10) : '—'}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <a
-                            href={`/trainer/assessment/${a.id}/review`}
+                          <Link
+                            to="/trainer/assessments"
                             className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white"
                           >
                             <i className="fas fa-eye" /> Review
-                          </a>
+                          </Link>
                         </td>
                       </tr>
                     )

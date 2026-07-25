@@ -6,6 +6,8 @@ export interface Env {
   SESSION_SECRET: string
   ALLOWED_ORIGINS: string
   ENVIRONMENT?: string
+  /** When "true"/"1"/"yes", enables POST /api/v1/auth/student/register */
+  ALLOW_STUDENT_SELF_REGISTER?: string
 }
 
 /**

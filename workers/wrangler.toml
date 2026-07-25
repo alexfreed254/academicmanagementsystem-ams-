@@ -1,22 +1,22 @@
-# TTTI AMS API — Cloudflare Worker (Hono + TypeScript)
-name = "ttti-ams-api"
+# ⚠️ DEPRECATED — do not deploy this file for production.
+#
+# Production is the monorepo ROOT wrangler.jsonc:
+#   one Worker = React SPA (frontend/dist) + Hono API (workers/src)
+#
+# This split-API Worker name (ttti-ams-api) belongs to the obsolete
+# Pages + separate API topology. Keep the file only for local reference.
+#
+# Local API-only: prefer `npx wrangler dev` from the repo root instead.
+
+name = "ttti-ams-api-unused"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Non-secret configuration. Secrets (SUPABASE_SERVICE_ROLE_KEY, SESSION_SECRET,
-# SUPABASE_ANON_KEY) are set with `wrangler secret put <NAME>` — never here.
 [vars]
 SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
-# Comma-separated list of allowed browser origins (Cloudflare Pages URL + custom domain)
-ALLOWED_ORIGINS = "http://localhost:5173,https://ttti-ams.pages.dev"
-# Environment name reported by /api/health
-ENVIRONMENT = "production"
+ALLOWED_ORIGINS = "http://localhost:5173"
+ENVIRONMENT = "development"
 
 [observability]
 enabled = true
-
-# Optional: route the Worker on your own domain (uncomment after DNS is on Cloudflare)
-# routes = [
-#   { pattern = "api.yourdomain.ac.ke", custom_domain = true }
-# ]

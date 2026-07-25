@@ -4,10 +4,13 @@
 #   - /api/* → workers/src (Hono)
 #   - everything else → frontend/dist (Vite SPA)
 #
+# Source of truth: repo-root wrangler.jsonc
+# Do NOT deploy frontend/wrangler.jsonc or workers/wrangler.toml in production.
+#
 # Dashboard settings for project "academic-management-system254":
 #
 #   Root directory:     (blank — repo root)
-#   Build command:      (optional) npm run build
+#   Build command:      (leave EMPTY — wrangler.jsonc build.command already builds)
 #   Deploy command:     npx wrangler deploy
 #
 # CRITICAL — Runtime secrets (Settings → Variables and Secrets):
@@ -27,5 +30,11 @@
 #
 # Non-secret vars are already in wrangler.jsonc (SUPABASE_URL, ALLOWED_ORIGINS).
 #
+# Optional SPA build var (only if a separate Flask host still serves PDFs):
+#   VITE_LEGACY_ORIGIN=https://your-flask-host.example
+# Leave VITE_API_BASE_URL empty — same-origin /api on this Worker.
+#
 # Local:
 #   Copy workers/.dev.vars.example → workers/.dev.vars and fill values.
+#   From repo root: npm run dev   (or npx wrangler dev)
+#   Deploy:           npm run deploy

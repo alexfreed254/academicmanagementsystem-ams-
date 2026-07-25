@@ -893,4 +893,88 @@ trainer.get('/trainer/marks-import', requireRole('trainer'), async (c) => {
   return ok(c, { items: [] })
 })
 
+trainer.get('/trainer/assessments/:assessment_id', requireRole('trainer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const user = c.get('user')
+  const assessmentId = c.req.param('assessment_id')
+  const assigned = await trainerAssignedUnitIds(db, user)
+  const { data: assessment } = await db
+    .from('assessments')
+    .select(
+      '*, user_profiles!assessments_student_id_fkey(full_name, admission_no), ' +
+        'reviewer:user_profiles!assessments_reviewed_by_fkey(full_name), ' +
+        'units(name, code), classes(name)',
+    )
+    .eq('id', assessmentId)
+    .maybeSingle()
+  if (!assessment) return err(c, 'Assessment not found.', 404)
+  const row = assessment as Row
+  if (!assigned.includes(row.unit_id)) return err(c, 'Forbidden.', 403, 'forbidden')
+  const { data: evidence } = await db
+    .from('evidence')
+    .select('*')
+    .eq('assessment_id', assessmentId)
+    .order('uploaded_at', { ascending: false })
+  await bulkFormativeMarksForPoe(db, [row])
+  return ok(c, { assessment: row, evidence: evidence ?? [] })
+})
+
+trainer.get('/trainer/view-session', requireRole('trainer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const user = c.get('user')
+  const classId = c.req.query('class_id') ?? ''
+  const unitId = c.req.query('unit_id') ?? ''
+  const week = parseInt(c.req.query('week') ?? '0', 10) || 0
+  const lesson = c.req.query('lesson') ?? ''
+  const year = parseInt(c.req.query('year') ?? '', 10) || currentYearEAT()
+  const term = parseInt(c.req.query('term') ?? '', 10) || 1
+
+  if (!classId || !unitId || !week || !lesson) {
+    return err(c, 'class_id, unit_id, week and lesson are required.', 400)
+  }
+
+  const [{ data: cls }, { data: unit }, { data: dept }, { data: records }, { data: events }] =
+    await Promise.all([
+      db.from('classes').select('name').eq('id', classId).maybeSingle(),
+      db.from('units').select('code, name').eq('id', unitId).maybeSingle(),
+      user.department_id
+        ? db.from('departments').select('name').eq('id', user.department_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      db
+        .from('attendance')
+        .select('*, user_profiles:student_id(full_name, admission_no)')
+        .eq('unit_id', unitId)
+        .eq('trainer_id', user.id)
+        .eq('week', week)
+        .eq('lesson', lesson)
+        .eq('year', year)
+        .eq('term', term)
+        .order('attendance_date'),
+      db
+        .from('class_events')
+        .select('*')
+        .eq('class_id', classId)
+        .eq('week', week)
+        .eq('lesson', lesson)
+        .eq('year', year)
+        .eq('term', term)
+        .limit(1),
+    ])
+
+  return ok(c, {
+    class: cls ?? {},
+    unit: unit ?? {},
+    department: dept ?? {},
+    records: records ?? [],
+    active_event: ((events ?? []) as Row[])[0] ?? null,
+    class_id: classId,
+    unit_id: unitId,
+    week,
+    lesson,
+    year,
+    term,
+    trainer_name: user.full_name ?? '',
+  })
+})
+
 export default trainer

@@ -485,4 +485,150 @@ student.get('/student/exam-booking-form', requireRole('student'), async (c) => {
   return ok(c, { items: data ?? [], student_id: user.id })
 })
 
+student.get('/student/upload-assessment-form', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: enrollment } = await db
+    .from('enrollments')
+    .select('class_id')
+    .eq('student_id', user.id)
+    .limit(1)
+    .maybeSingle()
+  const classId = (enrollment as Row | null)?.class_id as string | undefined
+  if (!classId) return ok(c, { class_units: [], class_id: null })
+  const { data } = await db
+    .from('class_units')
+    .select('unit_id, units(id, name, code)')
+    .eq('class_id', classId)
+  return ok(c, { class_units: data ?? [], class_id: classId })
+})
+
+student.get('/student/my-files', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: assessments } = await db
+    .from('assessments')
+    .select('*, classes(name), units(name, code)')
+    .eq('student_id', user.id)
+    .order('uploaded_at', { ascending: false })
+  const list = (assessments ?? []) as Row[]
+  const ids = list.map((a) => a.id as string)
+  const evCount = new Map<string, number>()
+  const evSize = new Map<string, number>()
+  if (ids.length) {
+    const { data: evRows } = await db.from('evidence').select('assessment_id, file_size').in('assessment_id', ids)
+    for (const ev of (evRows ?? []) as Row[]) {
+      const aid = ev.assessment_id as string
+      evCount.set(aid, (evCount.get(aid) ?? 0) + 1)
+      evSize.set(aid, (evSize.get(aid) ?? 0) + Number(ev.file_size ?? 0))
+    }
+  }
+  const items = list.map((a) => ({
+    ...a,
+    evidence_count: evCount.get(a.id as string) ?? 0,
+    evidence_size: evSize.get(a.id as string) ?? 0,
+  }))
+  return ok(c, { items })
+})
+
+student.get('/student/units/:unit_id', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const unitId = c.req.param('unit_id')
+  const { data: unit } = await db.from('units').select('*').eq('id', unitId).maybeSingle()
+  if (!unit) return err(c, 'Unit not found.', 404)
+  const { data: records } = await db
+    .from('attendance')
+    .select('*')
+    .eq('student_id', user.id)
+    .eq('unit_id', unitId)
+    .order('attendance_date', { ascending: false })
+  const list = (records ?? []) as Row[]
+  const total = list.length
+  const present = list.filter((r) => r.status === 'present').length
+  return ok(c, {
+    unit,
+    records: list,
+    total,
+    present,
+    absent: total - present,
+    pct: total ? Math.round((present / total) * 1000) / 10 : 0,
+  })
+})
+
+student.get('/student/portfolio-view', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: enrollment } = await db.from('enrollments').select('class_id').eq('student_id', user.id).limit(1)
+  const classId = ((enrollment ?? []) as Row[])[0]?.class_id as string | undefined
+  let classUnits: Row[] = []
+  if (classId) {
+    const { data } = await db.from('class_units').select('*, units(name, code)').eq('class_id', classId)
+    classUnits = (data ?? []) as Row[]
+  }
+  const { data: submissions } = await db
+    .from('assessments')
+    .select('*, units(name, code)')
+    .eq('student_id', user.id)
+    .order('uploaded_at', { ascending: false })
+  const items = (submissions ?? []) as Row[]
+  const stats = {
+    total: items.length,
+    pending: items.filter((p) => p.status === 'pending').length,
+    approved: items.filter((p) => p.status === 'approved').length,
+    rejected: items.filter((p) => p.status === 'rejected').length,
+  }
+  return ok(c, { items, class_units: classUnits, stats })
+})
+
+student.get('/student/upload-poe-form', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: profile } = await db.from('user_profiles').select('*').eq('id', user.id).maybeSingle()
+  const { data: enrollment } = await db.from('enrollments').select('class_id, classes(id, name)').eq('student_id', user.id).limit(1)
+  const en = ((enrollment ?? []) as Row[])[0]
+  const classId = en?.class_id as string | undefined
+  let units: Row[] = []
+  if (classId) {
+    const { data } = await db.from('class_units').select('*, units(name, code)').eq('class_id', classId)
+    units = (data ?? []) as Row[]
+  }
+  return ok(c, {
+    student: profile ?? {},
+    classes: en?.classes ? [en.classes] : [],
+    units,
+    current_year: currentYearEAT(),
+  })
+})
+
+student.get('/student/assessments/:id', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const id = c.req.param('id')
+  const { data: assessment } = await db
+    .from('assessments')
+    .select('*, classes(name), units(name, code)')
+    .eq('id', id)
+    .eq('student_id', user.id)
+    .maybeSingle()
+  if (!assessment) return err(c, 'Assessment not found.', 404)
+  const { data: evidence } = await db
+    .from('evidence')
+    .select('*')
+    .eq('assessment_id', id)
+    .order('uploaded_at', { ascending: false })
+  return ok(c, { assessment, evidence: evidence ?? [] })
+})
+
+student.get('/student/employment-projects', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('employment_projects')
+    .select('*')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
 export default student

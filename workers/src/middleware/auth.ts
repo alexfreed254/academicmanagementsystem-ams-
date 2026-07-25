@@ -11,6 +11,7 @@ const PASSWORD_CHANGE_ALLOWED = new Set([
   '/api/v1/auth/me',
   '/api/v1/auth/profile',
   '/api/v1/auth/profile/password',
+  '/api/v1/auth/change-password',
   '/api/v1/csrf-token',
 ])
 

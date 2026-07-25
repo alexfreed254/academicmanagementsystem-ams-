@@ -325,6 +325,10 @@ export default function LoginPage() {
 
             <p className="support">
               Need help? Contact <a href="mailto:support@ttti.ac.ke">support@ttti.ac.ke</a>
+              {' · '}
+              <Link to="/welcome">Welcome page</Link>
+              {' · '}
+              <Link to="/">Home</Link>
             </p>
           </section>
         </div>

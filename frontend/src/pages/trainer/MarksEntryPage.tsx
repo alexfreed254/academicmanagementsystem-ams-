@@ -8,7 +8,8 @@ import {
 } from '@/api/trainer'
 import { PortalShell } from '@/layouts/PortalShell'
 import { ErrorState, PageSkeleton } from '@/components/ui/States'
-import { getApiErrorMessage } from '@/lib/apiClient'
+import { getApiErrorMessage, legacyHref } from '@/lib/apiClient'
+import { PrintPdfLink } from '@/pages/shared/PrintReportPages'
 
 const YEARS = Array.from({ length: 12 }, (_, i) => 2024 + i)
 
@@ -191,8 +192,9 @@ export default function MarksEntryPage() {
     setAsmName(nextSuggestedName(t))
   }
 
-  const pdfHref = `/trainer/marks-entry/marks-pdf?class_id=${encodeURIComponent(classId)}&unit_id=${encodeURIComponent(unitId)}&year=${year}&term=${term}`
-  const xlsHref = `/trainer/marks-entry/export-excel?class_id=${encodeURIComponent(classId)}&unit_id=${encodeURIComponent(unitId)}&year=${year}&term=${term}`
+  const xlsHref = legacyHref(
+    `/trainer/marks-entry/export-excel?class_id=${encodeURIComponent(classId)}&unit_id=${encodeURIComponent(unitId)}&year=${year}&term=${term}`,
+  )
 
   if (q.isLoading) {
     return (
@@ -339,12 +341,23 @@ export default function MarksEntryPage() {
                 </h3>
                 {ordered.length > 0 && students.length > 0 ? (
                   <div className="action-btns">
-                    <a href={pdfHref} className="btn-dl-pdf">
-                      <i className="fas fa-file-pdf" /> Download PDF
-                    </a>
-                    <a href={xlsHref} className="btn-dl-xls">
-                      <i className="fas fa-file-excel" /> Download Excel
-                    </a>
+                    {classId && unitId ? (
+                      <PrintPdfLink
+                        to="/trainer/marks/print"
+                        params={new URLSearchParams({
+                          class_id: classId,
+                          unit_id: unitId,
+                          year: String(year),
+                          term: String(term),
+                        })}
+                        label="Print / PDF"
+                      />
+                    ) : null}
+                    {xlsHref ? (
+                      <a href={xlsHref} className="btn-dl-xls" target="_blank" rel="noreferrer">
+                        <i className="fas fa-file-excel" /> Download Excel
+                      </a>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
