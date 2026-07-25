@@ -1,0 +1,143 @@
+{% extends "internal_verifier/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Internal Verifier Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .stat-card { 
+    transition: transform 0.2s ease, box-shadow 0.2s ease; 
+  }
+  .stat-card:hover { 
+    transform: translateY(-4px); 
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12); 
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="bg-gray-50 min-h-screen p-6">
+  
+  <!-- Header Section -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Internal Verifier Dashboard</h1>
+    <p class="text-gray-600">Quality assurance and competency verification</p>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    
+    <!-- Pending Verifications -->
+    <div class="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-clock text-orange-600 text-xl"></i>
+        </div>
+        <span class="text-2xl font-bold text-orange-600">{{ total_pending }}</span>
+      </div>
+      <h3 class="text-gray-600 text-sm font-medium mb-1">Pending Verifications</h3>
+      <p class="text-gray-900 text-lg font-semibold">Awaiting Review</p>
+    </div>
+
+    <!-- Verified Competencies -->
+    <div class="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-check-circle text-green-600 text-xl"></i>
+        </div>
+        <span class="text-2xl font-bold text-green-600">{{ verified_count }}</span>
+      </div>
+      <h3 class="text-gray-600 text-sm font-medium mb-1">Verified</h3>
+      <p class="text-gray-900 text-lg font-semibold">Approved</p>
+    </div>
+
+    <!-- Rejected Competencies -->
+    <div class="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-times-circle text-red-600 text-xl"></i>
+        </div>
+        <span class="text-2xl font-bold text-red-600">{{ rejected_count }}</span>
+      </div>
+      <h3 class="text-gray-600 text-sm font-medium mb-1">Rejected</h3>
+      <p class="text-gray-900 text-lg font-semibold">Needs Revision</p>
+    </div>
+
+  </div>
+
+  <!-- Pending Competency Verifications -->
+  <div class="bg-white rounded-xl shadow-sm mb-8 border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-lg font-bold text-gray-900">
+        <i class="fas fa-clipboard-check text-blue-600 mr-2"></i>Pending Competency Verifications
+      </h2>
+      <a href="/internal-verifier/competency" class="text-blue-600 hover:text-blue-700 text-sm font-semibold">
+        View All <i class="fas fa-arrow-right ml-1"></i>
+      </a>
+    </div>
+    {% if pending_competencies %}
+    <div class="divide-y divide-gray-100">
+      {% for comp in pending_competencies %}
+      <div class="px-6 py-4 hover:bg-gray-50 transition">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <h3 class="font-semibold text-gray-900 mb-1">
+              {{ comp.user_profiles.full_name }} ({{ comp.user_profiles.admission_no }})
+            </h3>
+            <p class="text-sm text-gray-600 mb-2">{{ comp.units.name }} - {{ comp.competency_element }}</p>
+            <div class="flex gap-2">
+              <span class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded">
+                Status: {{ comp.competency_status }}
+              </span>
+              <span class="inline-block bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded">
+                Assessor: {{ comp.assessor_name }}
+              </span>
+            </div>
+          </div>
+          <a href="/internal-verifier/competency" 
+             class="ml-4 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-700 transition inline-flex items-center gap-1">
+            <i class="fas fa-check-double"></i> Verify
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="px-6 py-12 text-center">
+      <i class="fas fa-clipboard-check text-gray-300 text-5xl mb-4"></i>
+      <p class="text-gray-500">No pending verifications</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="text-lg font-bold text-gray-900">
+        <i class="fas fa-bolt text-yellow-600 mr-2"></i>Quick Actions
+      </h2>
+    </div>
+    <div class="px-6 py-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <a href="/internal-verifier/competency" 
+           class="bg-blue-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-blue-700 transition text-center flex items-center justify-center gap-2">
+          <i class="fas fa-clipboard-list"></i> View All Competencies
+        </a>
+        <a href="/internal-verifier/attachments" 
+           class="bg-green-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-green-700 transition text-center flex items-center justify-center gap-2">
+          <i class="fas fa-paperclip"></i> View Attachments
+        </a>
+        <a href="/internal-verifier/reports" 
+           class="bg-purple-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-purple-700 transition text-center flex items-center justify-center gap-2">
+          <i class="fas fa-file-alt"></i> CDACC Reports
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Pride in Technology Footer -->
+{% include 'partials/pride_footer.html' %}
+
+{% endblock %}

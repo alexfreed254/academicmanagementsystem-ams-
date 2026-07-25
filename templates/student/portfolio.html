@@ -1,0 +1,271 @@
+{% extends "student/base.html" %}
+{% block title %}Portfolio of Evidence{% endblock %}
+{% block page_title %}Portfolio of Evidence{% endblock %}
+{% block extra_style %}
+.page-wrap{padding:24px;max-width:960px;margin:0 auto}
+/* Summary bar */
+.summary-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+.summary-bar a{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;transition:all .2s}
+.summary-bar a.active-s{background:#4f46e5;color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
+.summary-bar a:not(.active-s){background:#fff;color:#475569;border:1px solid #e2e8f0}
+.summary-bar a:not(.active-s):hover{background:#f8fafc;border-color:#cbd5e1}
+.summary-bar .ml-auto{margin-left:auto}
+
+/* Cards */
+.card-file{background:#fff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:16px;transition:box-shadow .2s}
+.card-file:hover{box-shadow:0 4px 16px rgba(0,0,0,.06)}
+.card-file.approved{border-left:4px solid #10b981}
+.card-file.rejected{border-left:4px solid #ef4444}
+.card-file.pending{border-left:4px solid #f59e0b}
+.card-body{padding:20px}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.file-icon{width:48px;height:48px;background:#fef2f2;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.file-icon i{font-size:20px;color:#dc2626}
+.file-info{flex:1;overflow:hidden}
+.file-info .row1{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-approved{background:#d1fae5;color:#065f46}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-rejected{background:#fee2e2;color:#991b1b}
+.tag{font-size:11px;background:#f1f5f9;color:#475569;font-weight:700;padding:2px 8px;border-radius:6px}
+.file-info h4{margin:0 0 2px;font-size:14px;color:#1e293b;word-break:break-word}
+.file-info .meta{font-size:12px;color:#64748b;margin-top:4px}
+.file-info .meta span{margin-right:14px}
+.card-actions{display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+.btn-action{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:700;text-decoration:none;transition:all .2s;border:none;cursor:pointer}
+.btn-view{background:#eef2ff;color:#4f46e5}
+.btn-view:hover{background:#e0e7ff}
+.btn-evidence{background:#f3e8ff;color:#7c3aed}
+.btn-evidence:hover{background:#ede9fe}
+
+/* Rejected notice */
+.rejected-box{margin-top:16px;padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px}
+.rejected-box p{font-size:12px;color:#991b1b;font-weight:700;margin:0 0 12px}
+.rejected-box p i{margin-right:4px}
+.rejected-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn-danger-action{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;transition:all .2s}
+.btn-del{background:#dc2626;color:#fff}
+.btn-del:hover{background:#b91c1c}
+.btn-reup{background:#4f46e5;color:#fff}
+.btn-reup:hover{background:#4338ca}
+
+/* Empty state */
+.empty-state{text-align:center;padding:60px 20px;color:#94a3b8}
+.empty-state i{font-size:48px;margin-bottom:12px;display:block}
+
+/* Upload form on portfolio */
+.upload-section{background:#fff;border-radius:16px;border:1px solid #e2e8f0;padding:24px;margin-bottom:24px}
+.upload-section h3{font-size:15px;margin:0 0 16px;color:#1e293b}
+.upload-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+.upload-grid label{display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:4px}
+.upload-grid select,.upload-grid input{width:100%;padding:9px 12px;border:2px solid #e2e8f0;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box}
+.upload-grid select:focus,.upload-grid input:focus{border-color:#4f46e5}
+.file-drop-zone{border:2px dashed #cbd5e1;border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .3s;margin-bottom:16px}
+.file-drop-zone:hover{border-color:#4f46e5;background:#f5f3ff}
+.file-drop-zone i{font-size:32px;color:#94a3b8;margin-bottom:8px}
+.file-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.file-list span{background:#f1f5f9;padding:4px 10px;border-radius:6px;font-size:11px;color:#475569}
+{% endblock %}
+{% block content %}
+<div class="page-wrap">
+  <!-- Summary Bar -->
+  <div class="summary-bar">
+    <a href="{{ url_for('student.portfolio') }}" class="{% if not status_filter %}active-s{% endif %}">
+      All ({{ counts.total }})
+    </a>
+    <a href="{{ url_for('student.portfolio', status='pending') }}" class="{% if status_filter == 'pending' %}active-s{% endif %}">
+      <i class="fas fa-clock"></i> Pending ({{ counts.pending }})
+    </a>
+    <a href="{{ url_for('student.portfolio', status='approved') }}" class="{% if status_filter == 'approved' %}active-s{% endif %}">
+      <i class="fas fa-check-circle"></i> Approved ({{ counts.approved }})
+    </a>
+    <a href="{{ url_for('student.portfolio', status='rejected') }}" class="{% if status_filter == 'rejected' %}active-s{% endif %}">
+      <i class="fas fa-times-circle"></i> Rejected ({{ counts.rejected }})
+    </a>
+    <a href="{{ url_for('student.upload_assessment') }}" class="ml-auto" style="background:#4f46e5;color:#fff">
+      <i class="fas fa-plus"></i> Upload New
+    </a>
+  </div>
+
+  <!-- Upload Section (collapsed by default when there are assessments) -->
+  {% if not assessments %}
+  <div class="upload-section" id="upload-section">
+    <h3><i class="fas fa-cloud-upload-alt" style="color:#4f46e5"></i> Upload Assessments</h3>
+    <form method="POST" action="{{ url_for('student.upload_assessment') }}" enctype="multipart/form-data">
+      <div class="upload-grid">
+        <div>
+          <label>Unit</label>
+          <select name="unit_id" required>
+            <option value="">Select Unit</option>
+            {% for cu in enrolled_units %}
+            {% set u = cu.get('units') or {} %}
+            <option value="{{ cu.unit_id }}">{{ u.get('code','') }} — {{ u.get('name','') }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Assessment Type</label>
+          <select name="assessment_type" required>
+            <option value="">Select</option>
+            <option value="practical">Practical</option>
+            <option value="oral">Oral</option>
+            <option value="theory">Theory</option>
+          </select>
+        </div>
+        <div>
+          <label>Assessment No.</label>
+          <input type="number" name="assessment_no" min="1" required placeholder="e.g. 1">
+        </div>
+        <div>
+          <label>Term</label>
+          <select name="term" required>
+            <option value="">Select</option><option value="1">Term 1</option><option value="2">Term 2</option><option value="3">Term 3</option>
+          </select>
+        </div>
+        <div>
+          <label>Cycle</label>
+          <select name="cycle" required>
+            <option value="">Select</option><option value="1">Cycle 1</option><option value="2">Cycle 2</option><option value="3">Cycle 3</option>
+          </select>
+        </div>
+        <div>
+          <label>Year</label>
+          <select name="year" required>
+            {% for y in range(2024, 2030) %}
+            <option value="{{ y }}" {% if y == now().year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="file-drop-zone" id="drop-zone"
+        onclick="document.getElementById('file-input').click()"
+        ondragover="event.preventDefault();this.classList.add('hover')"
+        ondragleave="this.classList.remove('hover')"
+        ondrop="handleDrop(event)">
+        <input type="file" name="scripts" id="file-input" class="hidden" multiple
+          accept=".pdf" onchange="updateFileList(this)">
+        <div id="drop-icon"><i class="fas fa-file-pdf"></i></div>
+        <p style="font-size:13px;font-weight:600;color:#64748b;margin:4px 0 0">Click or drag PDF files here</p>
+        <p style="font-size:11px;color:#94a3b8;margin:4px 0 0">You can select multiple PDFs at once</p>
+        <div class="file-list" id="file-list"></div>
+      </div>
+
+      <button type="submit" style="width:100%;padding:12px;background:#4f46e5;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+        <i class="fas fa-upload"></i> Upload Assessments
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Assessment Cards -->
+  {% if assessments %}
+    {% for a in assessments %}
+    {% set u = a.get('units') or {} %}
+    {% set c = a.get('classes') or {} %}
+    <div class="card-file {{ a.status }}">
+      <div class="card-body">
+        <div class="card-top">
+          <div class="file-icon"><i class="fas fa-file-pdf"></i></div>
+          <div class="file-info">
+            <div class="row1">
+              <span class="badge badge-{{ a.status }}">
+                {% if a.status == 'approved' %}<i class="fas fa-check-circle"></i>
+                {% elif a.status == 'rejected' %}<i class="fas fa-times-circle"></i>
+                {% else %}<i class="fas fa-clock"></i>{% endif %}
+                {{ a.status|title }}
+              </span>
+              <span class="tag">{{ a.assessment_type }}</span>
+              {% if a.evidence_count > 0 %}
+              <span class="tag" style="background:#f3e8ff;color:#7c3aed">
+                <i class="fas fa-images"></i> {{ a.evidence_count }} evidence
+              </span>
+              {% endif %}
+            </div>
+            <h4>{{ a.get('script_file_name') or 'Assessment Script' }}</h4>
+            <div class="meta">
+              <span><i class="fas fa-users"></i> {{ c.get('name','—') }}</span>
+              <span><i class="fas fa-book"></i> {{ u.get('code','') }} — {{ u.get('name','') }}</span>
+              <span><i class="fas fa-hashtag"></i> #{{ a.assessment_no }}</span>
+              <span><i class="fas fa-calendar"></i> T{{ a.term }}/C{{ a.cycle }}/{{ a.year }}</span>
+              <span><i class="fas fa-file"></i> {{ a.get('script_file_size_fmt','') }}</span>
+              {% if a.uploaded_at %}<span><i class="fas fa-clock"></i> {{ a.uploaded_at[:10] }}</span>{% endif %}
+            </div>
+            {% if a.review_note and a.status == 'rejected' %}
+            <div style="margin-top:8px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px">
+              <p style="margin:0;font-size:12px;color:#991b1b;font-weight:600"><i class="fas fa-comment-alt"></i> Trainer note: {{ a.review_note }}</p>
+            </div>
+            {% endif %}
+          </div>
+          <div class="card-actions">
+            {% if a.script_file_path %}
+            <a href="{{ storage_url(BUCKET_SCRIPTS, a.script_file_path) }}" target="_blank" class="btn-action btn-view">
+              <i class="fas fa-eye"></i> View PDF
+            </a>
+            {% endif %}
+            <a href="{{ url_for('student.add_evidence', assessment_id=a.id) }}" class="btn-action btn-evidence">
+              <i class="fas fa-images"></i> Evidence
+            </a>
+          </div>
+        </div>
+
+        {% if a.status == 'rejected' %}
+        <div class="rejected-box">
+          <p><i class="fas fa-exclamation-triangle"></i> This file was rejected. Delete it and re-upload the correct scanned assessment.</p>
+          <div class="rejected-actions">
+            <form method="POST" action="{{ url_for('student.delete_assessment', assessment_id=a.id) }}"
+              onsubmit="return confirm('Permanently delete this rejected assessment? This cannot be undone.')">
+              <button type="submit" class="btn-danger-action btn-del"><i class="fas fa-trash-alt"></i> Delete File</button>
+            </form>
+            <a href="{{ url_for('student.upload_assessment') }}" class="btn-danger-action btn-reup"><i class="fas fa-cloud-upload-alt"></i> Re-Upload</a>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% elif not assessments %}
+    <div class="empty-state">
+      <i class="fas fa-folder-open"></i>
+      {% if status_filter %}
+      <p style="font-weight:700;font-size:15px">No {{ status_filter }} assessments found.</p>
+      <a href="{{ url_for('student.portfolio') }}" style="color:#4f46e5;font-weight:700;font-size:13px">View all files</a>
+      {% else %}
+      <p style="font-weight:700;font-size:15px">No assessments yet.</p>
+      <p style="font-size:13px;margin-top:4px">Upload your first assessment to get started.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block extra_script %}
+<script>
+function updateFileList(input) {
+  var list = document.getElementById('file-list');
+  var icon = document.getElementById('drop-icon');
+  list.innerHTML = '';
+  if (input.files.length) {
+    icon.innerHTML = '<i class="fas fa-check-circle" style="color:#10b981;font-size:32px"></i>';
+    for (var i = 0; i < input.files.length; i++) {
+      var span = document.createElement('span');
+      span.textContent = input.files[i].name;
+      list.appendChild(span);
+    }
+  }
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('hover');
+  var dt = e.dataTransfer;
+  var input = document.getElementById('file-input');
+  if (dt.files.length) {
+    input.files = dt.files;
+    updateFileList(input);
+  }
+}
+document.querySelectorAll('.file-drop-zone').forEach(function(z) {
+  z.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('hover'); });
+  z.addEventListener('dragleave', function(e) { this.classList.remove('hover'); });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,547 @@
+"""
+Industry Mentor Blueprint for Dual Training System
+Manages mentor-based workplace assessment, logbook approval, and competency tracking
+"""
+
+from flask import Blueprint, render_template, request, flash, redirect, url_for, abort
+from datetime import datetime
+from auth_utils import login_required, industry_mentor_required, current_user, write_audit_log
+from db import get_service_client
+
+industry_mentor_bp = Blueprint('industry_mentor', __name__)
+
+
+# ── Dashboard ───────────────────────────────────────────────────────────────
+
+@industry_mentor_bp.route("/dashboard")
+@login_required
+@industry_mentor_required
+def dashboard():
+    """Industry mentor dashboard showing assigned trainees and pending tasks."""
+    db = get_service_client()
+    user = current_user()
+    
+    # Get mentor's company
+    mentor = (db.table("mentors")
+             .select("*, companies(name, address)")
+             .eq("user_id", user["id"])
+             .single()
+             .execute().data)
+    
+    if not mentor:
+        flash("Mentor profile not found. Please contact administrator.", "error")
+        return redirect(url_for("main.index"))
+    
+    company_id = mentor["company_id"]
+    
+    # Get active attachments for mentor's company
+    attachments = (db.table("industrial_attachments")
+                  .select("*, user_profiles(full_name, admission_no), units(name, code), companies(name)")
+                  .eq("company_id", company_id)
+                  .eq("status", "active")
+                  .execute().data or [])
+    
+    # Get pending logbook approvals
+    pending_logbooks = (db.table("digital_logbook")
+                       .select("*, user_profiles(full_name, admission_no)")
+                       .eq("mentor_approval_status", "pending")
+                       .execute().data or [])
+    
+    # Filter logbooks by company
+    company_logbooks = []
+    for log in pending_logbooks:
+        attachment = (db.table("industrial_attachments")
+                     .select("company_id")
+                     .eq("id", log["attachment_id"])
+                     .single()
+                     .execute().data)
+        if attachment and attachment.get("company_id") == company_id:
+            company_logbooks.append(log)
+    
+    # Get competency assessments pending verification
+    pending_competencies = (db.table("competency_tracking")
+                           .select("*, user_profiles(full_name, admission_no), units(name, code)")
+                           .eq("verification_status", "pending")
+                           .execute().data or [])
+    
+    # Filter competencies by company
+    company_competencies = []
+    for comp in pending_competencies:
+        attachment = (db.table("industrial_attachments")
+                     .select("company_id")
+                     .eq("id", comp["attachment_id"])
+                     .single()
+                     .execute().data)
+        if attachment and attachment.get("company_id") == company_id:
+            company_competencies.append(comp)
+    
+    return render_template("industry_mentor/dashboard_enhanced.html",
+                          mentor=mentor,
+                          attachments=attachments,
+                          pending_logbooks=company_logbooks,
+                          pending_competencies=company_competencies)
+
+
+# ── Logbook Management ───────────────────────────────────────────────────────
+
+@industry_mentor_bp.route("/logbook")
+@login_required
+@industry_mentor_required
+def logbook():
+    """View and approve trainee logbook entries for the supervisor's company."""
+    import os
+    db = get_service_client()
+    user = current_user()
+    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+
+    mentor = (db.table("mentors")
+              .select("company_id, companies(name)")
+              .eq("user_id", user["id"])
+              .single()
+              .execute().data)
+    if not mentor:
+        abort(403)
+
+    company_id   = mentor["company_id"]
+    company_name = (mentor.get("companies") or {}).get("name", "")
+    status       = request.args.get("status", "pending")
+
+    # All attachments for this company → used to scope logbook entries
+    attachments  = (db.table("industrial_attachments")
+                    .select("id, student_id")
+                    .eq("company_id", company_id)
+                    .execute().data or [])
+    attachment_ids = [a["id"]       for a in attachments]
+    student_ids    = list({a["student_id"] for a in attachments})
+
+    # Fetch all logbook entries for this company (all statuses for counting)
+    all_entries = []
+    if attachment_ids:
+        all_entries = (db.table("digital_logbook")
+                       .select("*")
+                       .in_("attachment_id", attachment_ids)
+                       .order("log_date", desc=True)
+                       .order("entry_time", desc=False)
+                       .execute().data or [])
+
+    counts = {
+        "all":      len(all_entries),
+        "pending":  sum(1 for e in all_entries if (e.get("mentor_approval_status") or "pending") == "pending"),
+        "approved": sum(1 for e in all_entries if e.get("mentor_approval_status") == "approved"),
+        "rejected": sum(1 for e in all_entries if e.get("mentor_approval_status") == "rejected"),
+    }
+
+    # Apply status filter for display
+    if status == "all":
+        logbooks = all_entries
+    else:
+        logbooks = [e for e in all_entries
+                    if (e.get("mentor_approval_status") or "pending") == status]
+
+    # Attach student profiles
+    profile_map = {}
+    if student_ids:
+        profiles = (db.table("user_profiles")
+                    .select("id, full_name, admission_no")
+                    .in_("id", student_ids)
+                    .execute().data or [])
+        profile_map = {p["id"]: p for p in profiles}
+
+    # Pre-process evidence URLs and student info
+    for log in logbooks:
+        log["_student"] = profile_map.get(log["student_id"], {})
+        ev_paths = log.get("evidence_urls") or []
+        log["_evidence"] = [
+            {
+                "url": f"{supabase_url}/storage/v1/object/public/assessment-evidence/{p}",
+                "ext": p.rsplit(".", 1)[-1].lower() if "." in p else "bin",
+                "name": p.rsplit("/", 1)[-1],
+            }
+            for p in ev_paths if p
+        ]
+
+    return render_template(
+        "industry_mentor/logbook.html",
+        logbooks=logbooks,
+        status=status,
+        counts=counts,
+        company_name=company_name,
+    )
+
+
+@industry_mentor_bp.route("/logbook/<log_id>/approve", methods=["POST"])
+@login_required
+@industry_mentor_required
+def approve_logbook(log_id):
+    """Approve a logbook entry."""
+    db = get_service_client()
+    user = current_user()
+    
+    try:
+        # Get logbook
+        logbook = (db.table("digital_logbook")
+                  .select("*")
+                  .eq("id", log_id)
+                  .single()
+                  .execute().data)
+        
+        if not logbook:
+            flash("Logbook entry not found.", "error")
+            return redirect(url_for("industry_mentor.logbook"))
+        
+        # Verify mentor can approve this logbook
+        mentor = (db.table("mentors")
+                 .select("company_id")
+                 .eq("user_id", user["id"])
+                 .single()
+                 .execute().data)
+        
+        if not mentor:
+            abort(403)
+        
+        attachment = (db.table("industrial_attachments")
+                     .select("company_id")
+                     .eq("id", logbook["attachment_id"])
+                     .single()
+                     .execute().data)
+        
+        if attachment.get("company_id") != mentor["company_id"]:
+            abort(403)
+        
+        # Update logbook
+        db.table("digital_logbook").update({
+            "mentor_approval_status": "approved",
+            "mentor_approved_by": user["id"],
+            "mentor_approved_at": datetime.now().isoformat()
+        }).eq("id", log_id).execute()
+        
+        write_audit_log("approve_logbook", target=f"logbook:{log_id}")
+        flash("Logbook approved successfully.", "success")
+    except Exception as e:
+        flash(f"Error approving logbook: {e}", "error")
+    
+    return redirect(url_for("industry_mentor.logbook"))
+
+
+@industry_mentor_bp.route("/logbook/<log_id>/reject", methods=["POST"])
+@login_required
+@industry_mentor_required
+def reject_logbook(log_id):
+    """Reject a logbook entry."""
+    db = get_service_client()
+    user = current_user()
+    
+    comments = request.form.get("comments", "")
+    
+    try:
+        # Get logbook
+        logbook = (db.table("digital_logbook")
+                  .select("*")
+                  .eq("id", log_id)
+                  .single()
+                  .execute().data)
+        
+        if not logbook:
+            flash("Logbook entry not found.", "error")
+            return redirect(url_for("industry_mentor.logbook"))
+        
+        # Verify mentor can approve this logbook
+        mentor = (db.table("mentors")
+                 .select("company_id")
+                 .eq("user_id", user["id"])
+                 .single()
+                 .execute().data)
+        
+        if not mentor:
+            abort(403)
+        
+        attachment = (db.table("industrial_attachments")
+                     .select("company_id")
+                     .eq("id", logbook["attachment_id"])
+                     .single()
+                     .execute().data)
+        
+        if attachment.get("company_id") != mentor["company_id"]:
+            abort(403)
+        
+        # Update logbook
+        db.table("digital_logbook").update({
+            "mentor_approval_status": "rejected",
+            "mentor_comments": comments,
+            "mentor_approved_by": user["id"],
+            "mentor_approved_at": datetime.now().isoformat()
+        }).eq("id", log_id).execute()
+        
+        write_audit_log("reject_logbook", target=f"logbook:{log_id}")
+        flash("Logbook rejected.", "warning")
+    except Exception as e:
+        flash(f"Error rejecting logbook: {e}", "error")
+    
+    return redirect(url_for("industry_mentor.logbook"))
+
+
+# ── Competency Assessment ─────────────────────────────────────────────────────
+
+@industry_mentor_bp.route("/competency")
+@login_required
+@industry_mentor_required
+def competency():
+    """View and assess trainee competencies."""
+    db = get_service_client()
+    user = current_user()
+    
+    # Get mentor's company
+    mentor = (db.table("mentors")
+             .select("company_id")
+             .eq("user_id", user["id"])
+             .single()
+             .execute().data)
+    
+    if not mentor:
+        abort(403)
+    
+    company_id = mentor["company_id"]
+    
+    # Get filter parameters
+    status = request.args.get("status", "NYC")
+    
+    # Build query
+    query = (db.table("competency_tracking")
+            .select("*, user_profiles(full_name, admission_no), units(name, code), industrial_attachments(start_date, end_date, companies(id, name))")
+            .eq("competency_status", status))
+    
+    competencies = query.order("assessment_date", desc=True).execute().data or []
+    
+    # Filter by company
+    company_competencies = []
+    for comp in competencies:
+        attachment = comp.get("industrial_attachments", {})
+        if attachment.get("companies", {}).get("id") == company_id:
+            company_competencies.append(comp)
+    
+    return render_template("industry_mentor/competency.html",
+                          competencies=company_competencies,
+                          status=status)
+
+
+@industry_mentor_bp.route("/competency/<comp_id>/assess", methods=["POST"])
+@login_required
+@industry_mentor_required
+def assess_competency(comp_id):
+    """Assess a competency entry."""
+    db = get_service_client()
+    user = current_user()
+    
+    competency_status = request.form.get("competency_status")
+    assessor_comments = request.form.get("assessor_comments", "")
+    
+    if not competency_status:
+        flash("Competency status is required.", "error")
+        return redirect(url_for("industry_mentor.competency"))
+    
+    try:
+        # Get competency
+        competency = (db.table("competency_tracking")
+                     .select("*")
+                     .eq("id", comp_id)
+                     .single()
+                     .execute().data)
+        
+        if not competency:
+            flash("Competency entry not found.", "error")
+            return redirect(url_for("industry_mentor.competency"))
+        
+        # Verify mentor can assess this competency
+        mentor = (db.table("mentors")
+                 .select("company_id")
+                 .eq("user_id", user["id"])
+                 .single()
+                 .execute().data)
+        
+        if not mentor:
+            abort(403)
+        
+        attachment = (db.table("industrial_attachments")
+                     .select("company_id")
+                     .eq("id", competency["attachment_id"])
+                     .single()
+                     .execute().data)
+        
+        if attachment.get("company_id") != mentor["company_id"]:
+            abort(403)
+        
+        # Update competency
+        db.table("competency_tracking").update({
+            "competency_status": competency_status,
+            "assessed_by": user["id"],
+            "assessment_date": datetime.now().date().isoformat(),
+            "assessor_comments": assessor_comments
+        }).eq("id", comp_id).execute()
+        
+        write_audit_log("assess_competency", target=f"competency:{comp_id}")
+        flash("Competency assessed successfully.", "success")
+    except Exception as e:
+        flash(f"Error assessing competency: {e}", "error")
+    
+    return redirect(url_for("industry_mentor.competency"))
+
+
+# ── Trainee Monitoring ───────────────────────────────────────────────────────
+
+@industry_mentor_bp.route("/trainees")
+@login_required
+@industry_mentor_required
+def trainees():
+    """View all trainees assigned to mentor's company."""
+    db = get_service_client()
+    user = current_user()
+    
+    # Get mentor's company
+    mentor = (db.table("mentors")
+             .select("*, companies(name, address)")
+             .eq("user_id", user["id"])
+             .single()
+             .execute().data)
+    
+    if not mentor:
+        abort(403)
+    
+    company_id = mentor["company_id"]
+    
+    # Get all attachments for mentor's company
+    attachments = (db.table("industrial_attachments")
+                  .select("*, user_profiles(full_name, admission_no, mobile_number), units(name, code), companies(name)")
+                  .eq("company_id", company_id)
+                  .execute().data or [])
+    
+    return render_template("industry_mentor/trainees.html",
+                          mentor=mentor,
+                          attachments=attachments)
+
+
+# ── Location Monitoring ───────────────────────────────────────────────────────
+
+@industry_mentor_bp.route("/location")
+@login_required
+@industry_mentor_required
+def location():
+    """View trainee location logs for monitoring."""
+    db = get_service_client()
+    user = current_user()
+    
+    # Get mentor's company
+    mentor = (db.table("mentors")
+             .select("company_id")
+             .eq("user_id", user["id"])
+             .single()
+             .execute().data)
+    
+    if not mentor:
+        abort(403)
+    
+    company_id = mentor["company_id"]
+    
+    # Get recent location logs
+    location_logs = (db.table("location_logs")
+                    .select("*, user_profiles(full_name, admission_no), companies(name, latitude, longitude, geofence_radius_meters)")
+                    .order("check_in_time", desc=True)
+                    .limit(100)
+                    .execute().data or [])
+    
+    # Filter by company
+    company_logs = []
+    for log in location_logs:
+        attachment = (db.table("industrial_attachments")
+                     .select("company_id")
+                     .eq("id", log["attachment_id"])
+                     .single()
+                     .execute().data)
+        if attachment and attachment.get("company_id") == company_id:
+            company_logs.append(log)
+    
+    return render_template("industry_mentor/location.html",
+                          location_logs=company_logs)
+
+
+# ── Weekly attendance (supervisor marks weekly) ───────────────────────────────
+
+@industry_mentor_bp.route("/weekly-attendance")
+@login_required
+@industry_mentor_required
+def weekly_attendance():
+    db = get_service_client()
+    user = current_user()
+    mentor = (db.table("mentors").select("company_id").eq("user_id", user["id"]).limit(1).execute().data or [])
+    if not mentor:
+        flash("Mentor profile not found.", "error")
+        return redirect(url_for("industry_mentor.dashboard"))
+    company_id = mentor[0]["company_id"]
+
+    attachments = (db.table("industrial_attachments")
+                   .select("id, start_date, end_date, user_profiles!industrial_attachments_student_id_fkey(full_name, admission_no)")
+                   .eq("company_id", company_id)
+                   .eq("status", "active")
+                   .execute().data or [])
+
+    records = []
+    try:
+        att_ids = [a["id"] for a in attachments]
+        if att_ids:
+            records = (db.table("attachment_weekly_attendance")
+                       .select("*")
+                       .in_("attachment_id", att_ids)
+                       .order("week_start", desc=True)
+                       .execute().data or [])
+    except Exception:
+        pass
+
+    return render_template(
+        "industry_mentor/weekly_attendance.html",
+        attachments=attachments,
+        records=records,
+    )
+
+
+@industry_mentor_bp.route("/weekly-attendance/mark", methods=["POST"])
+@login_required
+@industry_mentor_required
+def mark_weekly_attendance():
+    db = get_service_client()
+    user = current_user()
+    attachment_id = request.form.get("attachment_id", "").strip()
+    week_start = request.form.get("week_start", "").strip()
+    days_present = int(request.form.get("days_present") or 0)
+    days_absent = int(request.form.get("days_absent") or 0)
+    comments = (request.form.get("comments") or "").strip()
+
+    if not attachment_id or not week_start:
+        flash("Attachment and week are required.", "error")
+        return redirect(url_for("industry_mentor.weekly_attendance"))
+
+    from datetime import date, timedelta
+    ws = date.fromisoformat(week_start)
+    we = ws + timedelta(days=6)
+
+    payload = {
+        "attachment_id": attachment_id,
+        "week_start": week_start,
+        "week_end": we.isoformat(),
+        "days_present": min(max(days_present, 0), 7),
+        "days_absent": min(max(days_absent, 0), 7),
+        "mentor_comments": comments or None,
+        "marked_by": user["id"],
+        "marked_at": datetime.utcnow().isoformat(),
+        "status": "submitted",
+    }
+    try:
+        existing = (db.table("attachment_weekly_attendance")
+                    .select("id").eq("attachment_id", attachment_id).eq("week_start", week_start)
+                    .limit(1).execute().data or [])
+        if existing:
+            db.table("attachment_weekly_attendance").update(payload).eq("id", existing[0]["id"]).execute()
+        else:
+            db.table("attachment_weekly_attendance").insert(payload).execute()
+        flash("Weekly attendance recorded.", "success")
+    except Exception as e:
+        flash(f"Could not save weekly attendance: {e}. Run attachment_workflow_migration.sql if needed.", "danger")
+    return redirect(url_for("industry_mentor.weekly_attendance"))
