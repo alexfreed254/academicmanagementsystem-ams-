@@ -1,0 +1,12 @@
+{
+  "name": "ttti-ams-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "deploy:frontend": "npm run build && npx wrangler deploy",
+    "deploy:api": "npm --prefix workers ci && npm --prefix workers run deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

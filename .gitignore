@@ -12,9 +12,12 @@ venv/
 env/
 *.log
 .DS_Store
+node_modules/
+.wrangler/
 frontend/node_modules/
 frontend/dist/
 frontend/.env
+frontend/.wrangler/
 workers/node_modules/
 workers/.wrangler/
 workers/.dev.vars
