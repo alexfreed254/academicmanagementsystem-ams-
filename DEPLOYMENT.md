@@ -46,7 +46,11 @@ and the blockers that keep PDFs / biometrics / Jinja portals on a legacy origin 
 
 No schema rewrite is required. Confirm:
 
-1. SQL Editor has applied `supabase_schema.sql` and every `*_migration.sql`.
+1. SQL Editor has applied `supabase_schema.sql` and every `*_migration.sql`,
+   **finishing with `rls_hardening_migration.sql`** (enables RLS on tables that
+   were missing it, removes `USING (true)` policies, and aligns the role CHECK
+   with the application's role list — safe for the running app because the
+   backend uses the service-role key).
 2. Storage buckets exist: `assessment-scripts`, `assessment-evidence`,
    `application-documents`, `trip-media`, `mentoring-tools`.
 3. Auth → Providers → Email enabled.
