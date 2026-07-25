@@ -8,37 +8,35 @@ A full-stack web application for managing academic operations at Thika Technical
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3.14 · Flask · Gunicorn |
+| Frontend | React 18 + Vite + TypeScript · Tailwind CSS · hosted on **Cloudflare Pages** |
+| Backend API | **Cloudflare Workers** · Hono · Zod · TypeScript (`workers/`) |
 | Database | Supabase (PostgreSQL + Row Level Security) |
-| Auth | Supabase Auth (JWT) for staff/employers · bcrypt hashed passwords for students |
+| Auth | Supabase Auth (JWT) for staff · Werkzeug-compatible hashes for students · session JWT on Workers |
 | Storage | Supabase Storage (PDFs, images, evidence files) |
-| Hosting | Render (Python web service, auto-deploy from GitHub) |
-| Frontend | **React 18 + Vite** (SPA in `frontend/`) · Jinja2 portals still available during incremental migration · Tailwind CSS · Font Awesome |
-| PDF generation | ReportLab |
-| Excel export | openpyxl |
+| Edge | Cloudflare DNS · CDN · SSL/TLS · WAF · DDoS |
+| Legacy (phase 2) | Flask Jinja portals + ReportLab PDFs + biometric device API (optional `VITE_LEGACY_ORIGIN`) |
 
----
+See [`MIGRATION_INVENTORY.md`](MIGRATION_INVENTORY.md) for the full audit and [`DEPLOYMENT.md`](DEPLOYMENT.md) for Cloudflare setup, secrets, DNS, WAF, CI/CD, and rollback.
 
 ## System Architecture
 
 ```
-Browser
-  │
-  ├─ React + Vite SPA (`frontend/`) ── Axios ──► Flask /api/v1/*
-  │
-  └─ Legacy Jinja portals (unchanged) ─────────► Flask HTML routes
-         │
-         ▼
-Render (Gunicorn → Flask app)
-  │
-  ├── Supabase Auth  ← login / JWT / password reset
-  ├── Supabase DB    ← all application data (PostgreSQL + RLS)
-  └── Supabase Storage ← uploaded files (PDFs, photos, documents)
+Users
+  ↓
+Cloudflare (DNS · SSL/TLS · CDN · WAF · DDoS)
+  ↓
+Cloudflare Pages — React + Vite SPA (frontend/)
+  ↓ HTTPS  Authorization: Bearer <session JWT>
+Cloudflare Workers — Hono API (workers/)  /api/v1/*
+  ↓
+Supabase — PostgreSQL + Auth + Storage + RLS
+
+Optional legacy:
+  Jinja portals / PDFs / biometrics ──► Flask on Render (VITE_LEGACY_ORIGIN)
 ```
 
-All data lives in Supabase. Render hosts the Python API. The React frontend is deployed separately (static hosting) and talks to Flask over `/api/v1`. See `frontend/README.md`.
-
-Jinja templates remain until each screen is ported — **design is preserved**, only the frontend language changes.
+All application data lives in Supabase. The production API for the React SPA is the
+Cloudflare Worker. Jinja HTML portals remain available during the incremental SPA migration.
 
 ---
 

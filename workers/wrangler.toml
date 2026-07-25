@@ -1,0 +1,22 @@
+# TTTI AMS API — Cloudflare Worker (Hono + TypeScript)
+name = "ttti-ams-api"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Non-secret configuration. Secrets (SUPABASE_SERVICE_ROLE_KEY, SESSION_SECRET,
+# SUPABASE_ANON_KEY) are set with `wrangler secret put <NAME>` — never here.
+[vars]
+SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+# Comma-separated list of allowed browser origins (Cloudflare Pages URL + custom domain)
+ALLOWED_ORIGINS = "http://localhost:5173,https://ttti-ams.pages.dev"
+# Environment name reported by /api/health
+ENVIRONMENT = "production"
+
+[observability]
+enabled = true
+
+# Optional: route the Worker on your own domain (uncomment after DNS is on Cloudflare)
+# routes = [
+#   { pattern = "api.yourdomain.ac.ke", custom_domain = true }
+# ]

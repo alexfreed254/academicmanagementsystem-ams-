@@ -15,3 +15,7 @@ env/
 frontend/node_modules/
 frontend/dist/
 frontend/.env
+workers/node_modules/
+workers/.wrangler/
+workers/.dev.vars
+workers/dist/

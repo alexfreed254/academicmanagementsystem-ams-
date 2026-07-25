@@ -10,7 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import * as authApi from '@/api/auth'
 import type { AuthUser } from '@/types'
-import { getApiErrorMessage } from '@/lib/apiClient'
+import { getApiErrorMessage, setAccessToken } from '@/lib/apiClient'
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onExpired = () => {
+      setAccessToken(null)
       setUser(null)
       queryClient.clear()
     }
@@ -85,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authApi.logout()
     } finally {
+      setAccessToken(null)
       setUser(null)
       queryClient.clear()
     }
