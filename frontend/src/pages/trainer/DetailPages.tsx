@@ -49,6 +49,11 @@ export function TrainerReviewAssessmentPage() {
   const assessment = (q.data?.assessment as Row) || {}
   const evidence = ((q.data?.evidence as Row[]) || []) as Row[]
   const pending = String(assessment.status || '') === 'pending'
+  const marksObtained = Number(assessment.marks_obtained)
+  const maxMarks = Number(assessment.max_marks ?? 100) || 100
+  const hasMarks = Number.isFinite(marksObtained)
+  const pct = hasMarks ? ((marksObtained / maxMarks) * 100).toFixed(1) : null
+  const marksLabel = hasMarks ? `${marksObtained}/${maxMarks}` : '— / —'
 
   return (
     <DetailShell
@@ -68,7 +73,15 @@ export function TrainerReviewAssessmentPage() {
           { label: 'Class', value: cell(assessment, 'classes.name') },
           { label: 'Type', value: cell(assessment, 'assessment_type') },
           { label: 'Status', value: <StatusBadge value={assessment.status} /> },
-          { label: 'Marks', value: `${assessment.marks_obtained ?? '—'} / ${assessment.max_marks ?? 100}` },
+          {
+            label: 'Marks Obtained',
+            value: (
+              <span style={{ fontWeight: 800, color: '#6d28d9' }}>
+                <i className="fas fa-star" style={{ marginRight: 6, color: '#f59e0b' }} />
+                {marksLabel}
+              </span>
+            ),
+          },
         ]}
       />
       <DetailCard title="Script">
@@ -85,16 +98,61 @@ export function TrainerReviewAssessmentPage() {
           </ul>
         )}
       </DetailCard>
+
+      {/* Prominent marks box — matches IMPLEMENTATION_COMPLETE / Jinja review_assessment */}
+      <div
+        style={{
+          marginBottom: 16,
+          borderRadius: 14,
+          padding: '18px 20px',
+          background: 'linear-gradient(135deg, #7b1fa2, #9c27b0)',
+          color: '#fff',
+          boxShadow: '0 8px 24px rgba(123,31,162,.28)',
+        }}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', opacity: 0.85, marginBottom: 6 }}>
+              <i className="fas fa-graduation-cap" style={{ marginRight: 6 }} />
+              ASSESSMENT SCORE
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.1 }}>{marksLabel}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', opacity: 0.85, marginBottom: 6 }}>
+              PERCENTAGE
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.1 }}>{pct != null ? `${pct}%` : '—'}</div>
+          </div>
+        </div>
+      </div>
+
       {pending ? (
         <DetailCard title="Review decision">
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Review note (optional)" style={{ ...inputStyle, minHeight: 80, marginBottom: 12 }} />
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Review notes / feedback"
+            style={{ ...inputStyle, minHeight: 80, marginBottom: 12 }}
+          />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <PrimaryButton disabled={review.isPending} onClick={() => review.mutate('approve')}>Approve</PrimaryButton>
+            <PrimaryButton disabled={review.isPending} onClick={() => review.mutate('approve')}>
+              Approve
+            </PrimaryButton>
             <button
               type="button"
               disabled={review.isPending}
               onClick={() => review.mutate('reject')}
-              style={{ border: 'none', background: '#fee2e2', color: '#991b1b', borderRadius: 8, padding: '10px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+              style={{
+                border: 'none',
+                background: '#fee2e2',
+                color: '#991b1b',
+                borderRadius: 8,
+                padding: '10px 16px',
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
             >
               Reject
             </button>

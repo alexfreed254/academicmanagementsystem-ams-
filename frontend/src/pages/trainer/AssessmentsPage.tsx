@@ -363,8 +363,9 @@ function FileCard({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {marks != null ? (
-            <span className="rounded-lg bg-purple-600 px-2 py-1 text-xs font-bold text-white">
-              {marks}/{max}
+            <span className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+              ★ {marks}/{max}
+              {max ? ` · ${((Number(marks) / Number(max)) * 100).toFixed(1)}%` : ''}
             </span>
           ) : null}
           <span className={pillClass(status as StatusFilter, false)}>

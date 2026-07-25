@@ -7,6 +7,7 @@ import { PortalShell } from '@/layouts/PortalShell'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
 import { InteractiveTablePage, StatusPill, cell } from '@/pages/shared/InteractiveTablePage'
 import { PrintPdfLink } from '@/pages/shared/PrintReportPages'
+import { PrideFooter } from '@/components/PrideFooter'
 import type { Row } from '@/api/portals'
 
 const summativeColumns = [
@@ -63,6 +64,7 @@ export function ClearanceApproverPage() {
           run: (row, comment) => postAction(`/clearance/approvals/${row.id}/reject`, { comments: comment }),
         },
       ]}
+      footer={<PrideFooter showLiveBadge={false} />}
     />
   )
 }
@@ -84,6 +86,7 @@ export function ClearanceStudentPage() {
           Clearance requests appear here once started. Contact your department if a course is missing.
         </span>
       }
+      footer={<PrideFooter showLiveBadge={false} />}
     />
   )
 }
@@ -115,6 +118,7 @@ export function ServiceClearancePage() {
           run: (row, comment) => postAction(`/clearance/approvals/${row.id}/reject`, { comments: comment }),
         },
       ]}
+      footer={<PrideFooter showLiveBadge={false} />}
     />
   )
 }
