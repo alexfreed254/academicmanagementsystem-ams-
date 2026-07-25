@@ -179,7 +179,7 @@ See also `CLOUDFLARE.md` for a short cheat-sheet.
    - `VITE_LEGACY_ORIGIN` = URL of the still-running Flask service (PDFs, biometrics, Jinja)
 5. Save and Deploy.
 
-SPA routing is covered by `frontend/public/_redirects` (`/* /index.html 200`).
+SPA routing is covered by `assets.not_found_handling = "single-page-application"` in the root `wrangler.jsonc`. Do not add a `_redirects` file — with Workers static assets it is rejected as an infinite-loop rule.
 
 ### Option B — GitHub Actions (also included)
 
