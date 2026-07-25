@@ -7,8 +7,8 @@ export const TOKEN_KEY = 'ttti_access_token'
 export const api: AxiosInstance = axios.create({
   baseURL,
   timeout: 30000,
-  // Bearer tokens don't need cookies. Keep credentials off so CORS is simpler
-  // across Pages (frontend) and Workers (API) on different subdomains.
+  // Same-origin SPA + API on one Worker: leave VITE_API_BASE_URL empty.
+  // Bearer JWT in sessionStorage — no cookies required.
   withCredentials: false,
   headers: {
     'Content-Type': 'application/json',
@@ -57,9 +57,9 @@ export function getApiErrorMessage(error: unknown, fallback = 'Something went wr
 }
 
 /**
- * Absolute URL for Flask-only PDF / biometric / Jinja exports.
- * Returns null when VITE_LEGACY_ORIGIN is unset so the SPA does not
- * pretend a Cloudflare Worker route exists for those downloads.
+ * Optional absolute URL for Flask-only leftovers (Excel openpyxl, biometric
+ * device POST). Prefer Cloudflare SPA print routes (`/.../print`) instead.
+ * Returns null when VITE_LEGACY_ORIGIN is unset.
  */
 export function legacyHref(path: string): string | null {
   const base = (import.meta.env.VITE_LEGACY_ORIGIN as string | undefined)?.replace(/\/$/, '') || ''

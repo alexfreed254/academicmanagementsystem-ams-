@@ -1,67 +1,92 @@
 # TTTI AMS — Cloudflare Migration Inventory
 
-Prepared before any code changes, per the migration rule. Sources: full read-only audits of the
-Flask backend, the React SPA, and the SQL schema/migrations.
+Canonical inventory for the Cloudflare migration. Update this file in place when the
+surface changes. Do not invent parallel inventory docs.
+
+Sources: Flask blueprints, React SPA (`frontend/`), Workers API (`workers/`), SQL schema.
 
 ---
 
-## 1. Current architecture
+## 1. Source architecture (pre-migration / Flask)
 
 ```
 Browsers
-  ├── Jinja portals (all 20 roles)  ──► Flask HTML routes (~230 routes, 20 blueprints)
-  └── React + Vite SPA (frontend/)  ──► Flask /api/v1/* (JSON, session cookie)
+  ├── Jinja portals (templates/, ~210 HTML) ──► Flask HTML (~230 routes, 20 blueprints)
+  └── React + Vite SPA (frontend/)           ──► Flask /api/v1/* (session cookie)
                         │
                         ▼
-        Render — gunicorn → Flask (app.py)
+              gunicorn → Flask (app.py)
                         │
         ┌───────────────┼────────────────┐
         ▼               ▼                ▼
   Supabase Auth   Supabase Postgres   Supabase Storage
-  (staff JWT)     (~55 tables + RLS)  (5 buckets)
 ```
 
-## 2. Flask route inventory (summary)
+## 2. Target / production architecture (implemented)
 
-| Blueprint | Prefix | Routes | Notes |
+**Cloudflare-native topology:** one Worker serves SPA assets + Hono API (Worker Assets =
+Pages-equivalent static hosting). Same origin for UI and `/api/*`.
+
+```
+Users
+  ↓
+Cloudflare (DNS · SSL/TLS · CDN · WAF · DDoS)
+  ↓
+Cloudflare Worker  (repo-root wrangler.jsonc → academic-management-system254)
+  ├─ /api/*     → Hono + TypeScript (workers/src)  Authorization: Bearer <session JWT>
+  └─ /*         → React SPA (frontend/dist)  SPA not_found_handling
+  ↓ service-role key (runtime secret only)
+Supabase — PostgreSQL (+RLS) · Auth (GoTrue) · Storage
+```
+
+Authoritative deploy: `npm run deploy` from repo root.  
+Do **not** deploy `frontend/wrangler.jsonc` or `workers/wrangler.toml` (retired leftovers).
+
+Diagrams that show “Pages + separate API Worker” are historical only.
+
+---
+
+## 3. Flask route inventory (source system)
+
+| Blueprint | Prefix | ~Routes | Notes |
 |---|---|---|---|
 | `main` | `/` | 2 | Public landing + course application |
 | `auth` | `/auth` | 6 | Dual login, logout, password, profile |
-| `api_v1` | `/api/v1` | **20** | **JSON API consumed by the React SPA — the Workers migration target** |
+| `api_v1` | `/api/v1` | ~20 (original SPA contract) | Migrated + greatly expanded on Workers |
 | `super_admin` | `/super-admin` | ~45 | CRUD, oversight, PDFs, imports |
 | `dept_admin` | `/dept-admin` | ~60 | Dept-scoped admin, PDFs, biometric enrol |
 | `trainer` | `/trainer` | ~25 | Attendance, marks, POE, PDFs/Excel |
 | `student` | `/student` | ~40 | Self-service, uploads, attachment, logbook |
 | `clearance` | `/clearance` | ~15 | Multi-stage clearance + public verify |
-| 12 other role blueprints | various | ~55 | Oversight, mentors, verifiers, services |
+| `biometric_attendance` | `/biometric` | device APIs | **Still Flask-only** (in-memory sessions) |
+| Other role blueprints | various | ~55 | Oversight, mentors, verifiers, services |
 
-Full per-route detail lives in the audit transcripts; the `/api/v1` surface is reproduced 1:1 in
-`workers/src/routes/`.
+Jinja UI under `templates/` is **legacy reference**. Runtime UI is React TypeScript.
 
-## 3. `/api/v1` endpoints (the SPA contract — migrated to Workers)
+---
 
-| Method | Path | Role |
-|---|---|---|
-| GET | `/api/v1/csrf-token` | public (legacy compatibility) |
-| POST | `/api/v1/auth/login` | public (staff = Supabase Auth; student = password hash) |
-| POST | `/api/v1/auth/logout` | any |
-| GET | `/api/v1/auth/me` | any |
-| GET | `/api/v1/notifications/recent` | authenticated |
-| GET | `/api/v1/notifications/count` | authenticated |
-| GET | `/api/v1/trainer/dashboard` | trainer |
-| GET | `/api/v1/trainer/marks-entry` | trainer |
-| POST | `/api/v1/trainer/marks-entry/save-mark` | trainer |
-| POST | `/api/v1/trainer/marks-entry/add-assessment` | trainer |
-| GET | `/api/v1/trainer/assessments` | trainer |
-| POST | `/api/v1/trainer/assessments/:id/review` | trainer |
-| GET | `/api/v1/trainer/attendance` | trainer |
-| POST | `/api/v1/trainer/attendance/submit` | trainer |
-| GET | `/api/v1/student/dashboard` | student |
-| GET | `/api/v1/student/attendance` | student |
-| GET | `/api/v1/student/units` | student |
-| GET | `/api/v1/student/marks` | student |
+## 4. Workers `/api/v1` surface (Cloudflare)
 
-## 4. Database tables (~55)
+Mounted from `workers/src/index.ts`. Approx **~238** endpoints across modules:
+
+| Module | Role |
+|---|---|
+| `auth.ts` | Login, logout, me, csrf, profile, password, forgot-password, student register |
+| `notifications.ts` | Recent / count / mark read |
+| `trainer.ts` | Dashboard, marks-entry, assessments, attendance, session detail |
+| `student.ts` | Dashboard, units, marks, portfolio, uploads form data, employment |
+| `admin.ts` | Super / dept dashboards |
+| `roles.ts` | Specialist role portal GETs (+ some POSTs) |
+| `shared.ts` | Admin/list GETs, clearance queues, academic trips detail |
+| `mutations.ts` | Writes, CRUD, uploads (base64 → Storage), meta helpers |
+| `public.ts` | Public departments + course apply |
+| `print.ts` | Browser-print JSON payloads (marks, attendance, graduation, etc.) |
+
+Plus `GET /api/health` (secrets readiness).
+
+---
+
+## 5. Database tables (~55+)
 
 Core (`supabase_schema.sql`): departments, courses, classes, units, user_profiles, class_units,
 trainer_units, enrollments, attendance, class_events, formative_assessments, formative_marks,
@@ -72,105 +97,118 @@ digital_logbook, competency_tracking, clearance_departments, clearance_stages, c
 clearance_approvals, admission_requests, admission_documents, course_applications,
 employment_tracking, employment_projects.
 
-Migration SQL adds: summative_competences, academic_trips, academic_trip_media, attachment_periods,
+Migrations add: summative_competences, academic_trips, academic_trip_media, attachment_periods,
 attachment_period_eligibility, attachment_weekly_attendance, attachment_grading_config,
 attachment_grades, mentoring_tool_uploads, clearance_lost_items, biometric_scanners,
 biometric_sessions, workshop_inventory, dept_notices.
 
-DB functions/triggers that must exist in the Supabase project: `set_updated_at`,
-`update_updated_at_column`, `calculate_grade`, `set_grade`, `current_user_role()`,
-`current_user_dept()`, `current_user_active()` + ~25 `updated_at` triggers.
+DB helpers: `set_updated_at`, `calculate_grade`, `set_grade`, `current_user_role()`,
+`current_user_dept()`, `current_user_active()` + updated_at triggers.
 
-## 5. Authentication flows
+---
 
-| Actor | Identifier | Credential store | Session (Flask today) | Session (Workers) |
-|---|---|---|---|---|
-| Staff (19 roles) | email | Supabase Auth (GoTrue) | Flask cookie + stored SB JWT pair | Signed HS256 session JWT (Bearer) |
-| Student | admission number | Werkzeug hash in `user_profiles.password_hash` (pbkdf2/scrypt) | Flask cookie only | Signed HS256 session JWT (Bearer) |
-| Biometric device | — | `BIOMETRIC_DEVICE_SECRET` shared secret | n/a | stays on legacy Flask |
+## 6. Authentication flows
 
-`must_change_password` blocks all endpoints except logout/me/csrf until changed — preserved in
-Workers middleware.
+| Actor | Identifier | Credential store | Cloudflare session |
+|---|---|---|---|
+| Staff (19 roles) | email | Supabase Auth (GoTrue) | Signed HS256 session JWT (Bearer), 24h |
+| Student | admission no. | `user_profiles.password_hash` (Werkzeug pbkdf2/scrypt) | Same JWT; WebCrypto / scrypt-js verify |
+| Biometric device | shared secret | `BIOMETRIC_DEVICE_SECRET` | **Not on Workers** — Flask device host |
 
-## 6. RBAC rules
+`must_change_password` blocks all API except logout/me/csrf/change-password (Workers middleware).
 
-- 20 roles (`auth_utils.py STAFF_ROLES` + `student`). Role checks are decorator-enforced per route.
-- Department isolation: `dept_isolation_check` — super_admin any dept, others own dept only.
-- Trainer scoping: assigned units = `trainer_units ∪ class_units` rows for the trainer.
-- Service clearance desks: `SERVICE_DEPT_ROLES` category → role map.
-- **Runtime reality:** nearly all Flask queries use the service-role key, so Supabase RLS is
-  defined but bypassed; Python is the only enforcement layer. The Workers API keeps the same
-  model (service key server-side only + code-level RBAC) and RLS remains defence-in-depth for
-  any client that ever holds a user JWT.
+---
 
-## 7. Storage operations
+## 7. RBAC
+
+- 20 roles (`STAFF_ROLES` + `student`); enforced in Workers middleware/route handlers.
+- Department isolation: `deptIsolationCheck` — super_admin any dept; others own dept.
+- Trainer scoping: `trainer_units ∪ class_units`.
+- Service clearance desks: category → role map.
+- Service-role key server-side only; RLS is defence-in-depth (same model as Flask).
+
+---
+
+## 8. Storage (ported to Workers)
 
 Buckets: `assessment-scripts`, `assessment-evidence`, `application-documents`, `trip-media`,
-`mentoring-tools`. Operations: upload, download+re-upload (rename flow), remove, public URL,
-signed URL (1h, when `PRIVATE_STORAGE=true`). Upload validation: extension allow-list + 5 MB cap.
-File upload endpoints are all on legacy Jinja routes (none in `/api/v1` yet).
+`mentoring-tools`.
 
-## 8. PDF / Excel generation
+Workers upload paths (base64 / multipart → Supabase Storage): public course apply, student
+assessment/POE/evidence, trip media, employment docs. Validation: extension allow-list + size cap.
 
-ReportLab + openpyxl + Pillow — **not portable to Workers** (CPython native deps). All PDF/Excel
-routes remain on the legacy Flask service until re-implemented; the SPA links out to them via
-`VITE_LEGACY_ORIGIN`. Affected: transcripts, Form 1A exam booking, attendance registers, clearance
-certificates, marks exports, GIS exports, summative/graduation exports.
+---
 
-## 9. Payments
+## 9. PDF / Excel
 
-None anywhere in the codebase (no M-Pesa/Stripe/etc.). Fee handling is manual checklists.
-
-## 10. Biometric integration
-
-BioEntry W scanners POST to `/biometric/api/scan` and `/biometric/api/enroll` with a shared
-secret. Live sessions are held in **in-process Python dicts + threading locks** — incompatible
-with stateless Workers. Stays on legacy Flask; future port needs Durable Objects or the (already
-existing, unused) `biometric_sessions` table.
-
-## 11. Background / scheduled tasks
-
-No cron/Celery. Only fire-and-forget `threading.Thread` audit writes on logout — replaced in
-Workers by `ctx.waitUntil()`.
-
-## 12. External APIs
-
-None. The only outbound calls are to Supabase (PostgREST, GoTrue, Storage). GPS check-in stores
-browser geolocation; maps render client-side.
-
-## 13. Frontend API calls (React SPA)
-
-All via one Axios instance (`frontend/src/lib/apiClient.ts`): the 18 authenticated endpoints in
-section 3. No Supabase JS client, no fetch(), no uploads in the SPA yet. Legacy links (PDFs,
-biometric, clearance, trips, summative, profile, notifications page) open the Flask origin via
-`VITE_LEGACY_ORIGIN`.
-
-## 14. Migration blockers identified (and how they are handled)
-
-| Blocker | Resolution |
+| Kind | Cloudflare status |
 |---|---|
-| Python/WSGI runtime | New `workers/` Hono + TypeScript API |
-| `supabase-py`/`gotrue` SDKs | `@supabase/supabase-js` (Workers-compatible) |
-| Werkzeug password hashes | WebCrypto PBKDF2 + `scrypt-js` verifier (hash format preserved — no student resets needed) |
-| Server-side session cookie | Stateless signed JWT (Bearer), 24 h expiry |
-| `threading.Thread` audit | `ctx.waitUntil()` |
-| In-memory rate limiter | Cloudflare WAF rate-limiting rules (edge) |
-| ReportLab/openpyxl/Pillow | Stay on legacy Flask origin (phase 2: JS PDF lib or render service) |
-| Biometric in-memory sessions | Stay on legacy Flask (phase 2: Durable Objects) |
-| Jinja HTML portals (~210 routes) | Incremental SPA migration continues; legacy origin retained |
-| Local filesystem logo reads | Not needed in Workers (no PDF generation there) |
+| Browser print reports | **Ported** — `print.ts` + `PrintReportPages.tsx` (`/.../print`) |
+| ReportLab binary PDFs | Not on Workers (CPython). Prefer browser print; optional `VITE_LEGACY_ORIGIN` |
+| openpyxl Excel export/import | **Not ported** — optional legacy Flask only |
 
-## 15. Target architecture (implemented)
+---
 
-```
-Users
-  ↓
-Cloudflare (DNS, SSL/TLS, CDN, WAF, DDoS, rate limiting)
-  ↓
-Cloudflare Pages ── React + Vite + TypeScript (frontend/)
-  ↓ HTTPS  Authorization: Bearer <session JWT>
-Cloudflare Workers ── Hono + TypeScript + Zod (workers/)
-  │   auth · RBAC (20 roles) · dept isolation · audit logs · business logic
-  ↓ service-role key (secret, server-side only)
-Supabase ── PostgreSQL (+RLS) · Auth (GoTrue) · Storage
-```
+## 10. Payments
+
+None (no M-Pesa/Stripe). Fees are manual checklists.
+
+---
+
+## 11. Biometric
+
+BioEntry W → `POST /biometric/api/scan` + `/enroll` with shared secret. Live sessions used
+in-process Python dicts + locks — **incompatible with Workers**. Remains on optional Flask
+device host until Durable Objects / `biometric_sessions` table port.
+
+SPA: scanner registration list + manual attendance work on Cloudflare; live device POST does not.
+
+---
+
+## 12. Background / scheduled tasks
+
+No Celery/cron. Audit writes use `executionCtx.waitUntil()` on Workers.
+
+---
+
+## 13. External APIs
+
+None beyond Supabase (PostgREST, GoTrue, Storage). Geolocation is client-side.
+
+---
+
+## 14. Frontend API usage (React SPA)
+
+- Axios (`frontend/src/lib/apiClient.ts`): empty `VITE_API_BASE_URL` → same-origin `/api/v1`.
+- Auth: Bearer JWT in `sessionStorage`.
+- No Supabase JS client in the browser.
+- Portals: React Router + PortalShell; Jinja templates are not served in production.
+
+---
+
+## 15. Migration blockers (status)
+
+| Blocker | Status |
+|---|---|
+| Python/WSGI | Replaced by Workers Hono |
+| Werkzeug password hashes | WebCrypto + scrypt-js (format preserved) |
+| Session cookie | Stateless Bearer JWT |
+| `threading.Thread` audit | `waitUntil()` |
+| In-memory rate limit | Cloudflare WAF rate rules |
+| Jinja portals | Replaced by React SPA on Worker assets |
+| File uploads | Ported to Workers + Storage |
+| Browser-printable reports | Ported |
+| Excel openpyxl | Optional Flask legacy |
+| Biometric live sessions | Optional Flask / future Durable Objects |
+
+---
+
+## 16. Cloudflare compatibility checklist
+
+- [x] Root `wrangler.jsonc` with `nodejs_compat`, assets SPA, `run_worker_first: ["/api/*"]`
+- [x] Runtime secrets: `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`
+- [x] No `fs` / native modules in Workers source
+- [x] SPA uses `import.meta.env` only (no Node `process.env` in browser bundle)
+- [x] Unified CI deploy (`.github/workflows/deploy.yml`)
+- [ ] Optional: custom domain on Worker + DNS/WAF in Cloudflare dashboard
+- [ ] Optional: Excel + biometric device host if those features remain required

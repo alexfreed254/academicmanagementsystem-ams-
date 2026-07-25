@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   fetchAssessments,
   reviewAssessment,
@@ -9,7 +10,7 @@ import {
 } from '@/api/trainer'
 import { PortalShell } from '@/layouts/PortalShell'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
-import { getApiErrorMessage, legacyHref } from '@/lib/apiClient'
+import { getApiErrorMessage } from '@/lib/apiClient'
 
 type Tab = 'dashboard' | 'browse' | 'search'
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected'
@@ -390,16 +391,12 @@ function FileCard({
           >
             Return
           </button>
-          {legacyHref(`/trainer/assessment/${file.id}/review`) ? (
-            <a
-              href={legacyHref(`/trainer/assessment/${file.id}/review`) || undefined}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Full review
-            </a>
-          ) : null}
+          <Link
+            to={`/trainer/assessments/${file.id}/review`}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+          >
+            Full review
+          </Link>
         </div>
       ) : null}
 

@@ -1,15 +1,15 @@
 /**
- * TTTI Academic Management System — Cloudflare Workers API.
+ * TTTI Academic Management System — Cloudflare Worker (Hono API + SPA assets).
  *
- * Hono + TypeScript replacement for the Flask /api/v1 JSON API.
+ * Production topology (repo-root wrangler.jsonc):
+ *   Users → Cloudflare (DNS/CDN/WAF/DDoS)
+ *        → this Worker
+ *             /api/*  → Hono (this file)
+ *             /*      → frontend/dist (React SPA assets)
+ *        → Supabase (PostgreSQL + Auth + Storage + RLS)
  *
- *   Users → Cloudflare (DNS/CDN/WAF/DDoS) → Pages (React SPA)
- *         → this Worker (auth, RBAC, business logic)
- *         → Supabase (PostgreSQL + Auth + Storage + RLS)
- *
- * Auth model: stateless signed session JWT sent as `Authorization: Bearer`.
- * All DB access uses the service-role key (secret) — RBAC and department
- * isolation are enforced in middleware/route code, mirroring the Flask app.
+ * Auth: signed session JWT as `Authorization: Bearer`.
+ * DB: service-role key (runtime secret); RBAC + dept isolation in route code.
  */
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'

@@ -116,125 +116,25 @@ npm run dev            # wrangler dev at repo root (SPA assets + /api)
 
 ## 3b. Historical note — split Pages + API (obsolete)
 
-The sections that previously described Cloudflare Pages (`ttti-ams`) plus a separate
-API Worker (`ttti-ams-api`) are **obsolete**. Keeping a short note here so older
-runbooks are not followed by mistake:
+**Do not** create Cloudflare Pages (`ttti-ams`) plus a separate API Worker (`ttti-ams-api`).
+**Do not** set Workers Builds root directory to `workers/`.
+**Do not** edit or deploy `workers/wrangler.toml` for production.
 
-- Leave `VITE_API_BASE_URL` **empty** on the unified Worker (same-origin `/api`).
-- Optional `VITE_LEGACY_ORIGIN` only if a Flask host still serves PDF/biometric exports.
+Production is one Worker from repo-root `wrangler.jsonc` (`academic-management-system254`):
+SPA assets + Hono API on the same origin. Worker Assets cover the “Pages” role.
 
-For DNS, WAF, custom domains, and rollback detail that still apply to the Worker,
-continue with the remaining sections below (treat “Pages URL” as your Worker URL /
-custom domain).npx wrangler dev       # http://127.0.0.1:8787
-curl http://127.0.0.1:8787/api/health
-```
+- Leave `VITE_API_BASE_URL` **empty** (same-origin `/api`).
+- Optional `VITE_LEGACY_ORIGIN` only for Excel openpyxl / biometric device host.
+- Runtime secrets on the unified Worker: `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`.
+- From repo root: `npm run deploy` (or empty Build command + Deploy `npx wrangler deploy` — root `wrangler.jsonc` already runs `build.command`).
 
-Production secrets (never in `wrangler.toml`):
-
-```bash
-npx wrangler secret put SUPABASE_ANON_KEY
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-npx wrangler secret put SESSION_SECRET
-```
-
-Non-secret vars — edit `workers/wrangler.toml`:
-
-```toml
-[vars]
-SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
-ALLOWED_ORIGINS = "https://ttti-ams.pages.dev,https://ams.yourdomain.ac.ke"
-ENVIRONMENT = "production"
-```
-
-Deploy:
-
-```bash
-npx wrangler deploy
-# → https://ttti-ams-api.<account>.workers.dev
-```
-
-Optional custom API domain (after DNS is on Cloudflare):
-
-```toml
-routes = [
-  { pattern = "api.yourdomain.ac.ke", custom_domain = true }
-]
-```
-
-Then redeploy. SSL is automatic (Full / Full strict).
+See `CLOUDFLARE.md` and `MIGRATION_INVENTORY.md`.
 
 ---
 
-## 3b. IMPORTANT — fix the broken Git-connected deploy
+## 4. Cloudflare Pages setup — obsolete
 
-Your log showed Cloudflare building from the **repo root**, running `pip install`
-on Flask, then `npx wrangler deploy` uploading **raw `frontend/` source**
-(`.tsx` files). That is not a working SPA.
-
-### Fix for project `academic-management-system254` (frontend)
-
-In Cloudflare Dashboard → Workers & Pages → **academic-management-system254**
-→ Settings → Builds:
-
-| Setting | Value |
-|---|---|
-| Root directory | *(leave empty / repo root)* |
-| **Build command** | `npm run build` |
-| **Deploy command** | `npx wrangler deploy` |
-| Build watch paths | `frontend/**` |
-
-Build variables (Production):
-
-| Variable | Value |
-|---|---|
-| `VITE_API_BASE_URL` | your API Worker URL (see Project 2 below) |
-| `VITE_LEGACY_ORIGIN` | optional Flask URL for PDFs / biometrics |
-
-The root `wrangler.jsonc` serves `./frontend/dist` (built SPA) with SPA
-fallback. The root `package.json` `build` script runs `npm ci` + Vite build
-inside `frontend/`. After saving settings, trigger **Retry deployment**.
-
-> Do **not** leave Build command empty — that is what caused the raw-source upload.
-
-### Project 2 — API (`workers/`) — create a second Workers project
-
-- Connect the same GitHub repo
-- **Root directory = `workers`**
-- Build command: `npm ci`
-- Deploy command: `npx wrangler deploy`
-- Secrets: `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`
-- Vars in `workers/wrangler.toml`: `SUPABASE_URL`, `ALLOWED_ORIGINS` (include your frontend `*.workers.dev` URL)
-
-See also `CLOUDFLARE.md` for a short cheat-sheet.
-
----
-
-## 4. Cloudflare Pages setup (Frontend) — alternative to 3b Project 1
-
-### Option A — GitHub automatic (recommended)
-
-1. Dash → Workers & Pages → Create → Pages → Connect to Git
-2. Select `ACADEMIC-MANAGEMENT-SYSTEM254`
-3. Build settings:
-   - Framework preset: Vite
-   - Root directory: `frontend`
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-4. Environment variables (Production):
-   - `VITE_API_BASE_URL` = `https://ttti-ams-api.<account>.workers.dev`  
-     (or `https://api.yourdomain.ac.ke`)
-   - `VITE_LEGACY_ORIGIN` = URL of the still-running Flask service (PDFs, biometrics, Jinja)
-5. Save and Deploy.
-
-SPA routing is covered by `assets.not_found_handling = "single-page-application"` in the root `wrangler.jsonc`. Do not add a `_redirects` file — with Workers static assets it is rejected as an infinite-loop rule.
-
-### Option B — GitHub Actions (also included)
-
-`.github/workflows/deploy-pages.yml` builds and runs
-`wrangler pages deploy frontend/dist --project-name=ttti-ams`.
-
-Create the Pages project once (`wrangler pages project create ttti-ams`) if it does
-not already exist, then rely on the workflow.
+Skip. Do not connect a Pages project for this app. Use the unified Worker (§3).
 
 ---
 
@@ -242,14 +142,14 @@ not already exist, then rely on the workflow.
 
 | Name | Where | Secret? | Purpose |
 |---|---|---|---|
-| `SUPABASE_URL` | Worker vars | no | Project URL |
-| `SUPABASE_ANON_KEY` | Worker secret | yes | Staff GoTrue login |
-| `SUPABASE_SERVICE_ROLE_KEY` | Worker secret | yes | Server DB / Storage (bypasses RLS) |
-| `SESSION_SECRET` | Worker secret | yes | Signs session JWTs (HS256) |
-| `ALLOWED_ORIGINS` | Worker vars | no | CORS allow-list (comma-separated) |
-| `ENVIRONMENT` | Worker vars | no | Label in `/api/health` |
-| `VITE_API_BASE_URL` | Pages env / GH var | no | Absolute API origin baked into the SPA |
-| `VITE_LEGACY_ORIGIN` | Pages env / GH var | no | Flask origin for PDF / biometric links |
+| `SUPABASE_URL` | Root `wrangler.jsonc` vars | no | Project URL |
+| `SUPABASE_ANON_KEY` | Worker **runtime** secret | yes | Staff GoTrue login |
+| `SUPABASE_SERVICE_ROLE_KEY` | Worker **runtime** secret | yes | Server DB / Storage |
+| `SESSION_SECRET` | Worker **runtime** secret | yes | Signs session JWTs (HS256) |
+| `ALLOWED_ORIGINS` | Root `wrangler.jsonc` vars | no | CORS allow-list |
+| `ENVIRONMENT` | Root `wrangler.jsonc` vars | no | Label in `/api/health` |
+| `VITE_API_BASE_URL` | Leave empty | no | Same-origin `/api` on unified Worker |
+| `VITE_LEGACY_ORIGIN` | Optional SPA build var | no | Excel / biometric device host only |
 | `CLOUDFLARE_API_TOKEN` | GitHub secret | yes | CI deploys |
 | `CLOUDFLARE_ACCOUNT_ID` | GitHub secret | yes | CI deploys |
 
@@ -260,11 +160,10 @@ Frontend must **never** receive the service-role key.
 ## 6. Custom domain, DNS, SSL
 
 1. Add the institute domain to Cloudflare (Add a Site) and switch nameservers.
-2. Pages → Custom domains → `ams.yourdomain.ac.ke` (CNAME to `ttti-ams.pages.dev`).
-3. Workers → Triggers → Custom Domains → `api.yourdomain.ac.ke`.
-4. SSL/TLS → Overview → set mode to **Full (strict)**.
-5. Always Use HTTPS = On. Automatic HTTPS Rewrites = On.
-6. Update Worker `ALLOWED_ORIGINS` to include `https://ams.yourdomain.ac.ke` and redeploy.
+2. Workers → `academic-management-system254` → Custom Domains → `ams.yourdomain.ac.ke` (one hostname for SPA + API).
+3. SSL/TLS → Overview → **Full (strict)**. Always Use HTTPS = On.
+4. Update `ALLOWED_ORIGINS` in root `wrangler.jsonc` to include `https://ams.yourdomain.ac.ke` and redeploy.
+5. Optional WAF rate-limiting on `/api/v1/auth/login`.
 7. Rebuild Pages so `VITE_API_BASE_URL=https://api.yourdomain.ac.ke`.
 
 DNS records Cloudflare will create automatically for Pages/Workers custom domains;

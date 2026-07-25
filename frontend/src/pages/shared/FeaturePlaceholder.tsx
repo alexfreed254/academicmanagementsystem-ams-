@@ -13,8 +13,9 @@ function titleFromPath(pathname: string) {
 }
 
 /**
- * Placeholder for features not yet ported to React.
- * Preserves navigation and points users to the working Flask UI.
+ * Fallback screen for unmatched portal paths.
+ * Prefer registering real React routes; optional VITE_LEGACY_ORIGIN only for
+ * Flask leftovers (Excel / biometric device host).
  */
 export default function FeaturePlaceholder({
   title,

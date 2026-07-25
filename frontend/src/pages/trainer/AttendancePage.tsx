@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { fetchAttendance, submitAttendance } from '@/api/trainer'
 import { PortalShell } from '@/layouts/PortalShell'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
-import { getApiErrorMessage, legacyHref } from '@/lib/apiClient'
+import { getApiErrorMessage } from '@/lib/apiClient'
 import { PrintPdfLink } from '@/pages/shared/PrintReportPages'
 
 const YEARS = Array.from({ length: 12 }, (_, i) => 2024 + i)
@@ -202,24 +202,13 @@ export default function AttendancePage() {
         {data.attendance_submitted ? (
           <div className="mb-4 rounded-xl px-4 py-3 text-sm font-medium" style={{ background: '#dbeafe', color: '#2563eb' }}>
             Attendance already submitted for this session.{' '}
-            {(() => {
-              const href = legacyHref(
-                `/trainer/view-session?class_id=${classId}&unit_id=${unitId}&week=${week}&lesson=${lesson}&year=${year}&term=${term}`,
-              )
-              return href ? (
-                <a className="font-bold underline" href={href} target="_blank" rel="noreferrer">
-                  View session
-                </a>
-              ) : (
-                <Link
-                  className="font-bold underline"
-                  to={`/trainer/session/print?class_id=${encodeURIComponent(classId)}&unit_id=${encodeURIComponent(unitId)}&week=${week}&lesson=${encodeURIComponent(lesson)}&year=${year}&term=${term}`}
-                  target="_blank"
-                >
-                  Print session
-                </Link>
-              )
-            })()}
+            <Link
+              className="font-bold underline"
+              to={`/trainer/session/print?class_id=${encodeURIComponent(classId)}&unit_id=${encodeURIComponent(unitId)}&week=${week}&lesson=${encodeURIComponent(lesson)}&year=${year}&term=${term}`}
+              target="_blank"
+            >
+              Print session
+            </Link>
           </div>
         ) : null}
 
