@@ -1,0 +1,16 @@
+{
+  // Frontend as a Cloudflare static-assets Worker.
+  // Serves the BUILT SPA in ./dist (run `npm run build` first) — never raw src/.
+  // Keeps the existing worker name so it replaces the earlier (broken) deploy.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "academic-management-system254",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./dist",
+    // React Router SPA — serve index.html for unknown client-side routes.
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

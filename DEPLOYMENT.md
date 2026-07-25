@@ -114,7 +114,42 @@ Then redeploy. SSL is automatic (Full / Full strict).
 
 ---
 
-## 4. Cloudflare Pages setup (Frontend)
+## 3b. IMPORTANT — correct Git-connected (Workers Builds) setup
+
+If you connect the GitHub repo directly to Cloudflare with "Deploy a Worker" and
+leave the defaults, Cloudflare picks the **repo root**, runs `pip install` on the
+Flask backend, and `npx wrangler deploy` uploads the **raw `frontend/` source**
+instead of the built app — and never deploys the API. That is wrong.
+
+This repo is a monorepo with **two** deployable projects. Create **two** separate
+Cloudflare Workers Builds projects, each pointing at a subdirectory:
+
+### Project 1 — Frontend (`frontend/`)
+- Connect repo → **Set root directory = `frontend`**
+- Build command: `npm ci && npm run build`
+- Deploy command: `npx wrangler deploy`
+- Build variables: `VITE_API_BASE_URL` = your API URL (e.g. `https://ttti-ams-api.<account>.workers.dev`), optional `VITE_LEGACY_ORIGIN`
+- Uses `frontend/wrangler.jsonc` (static-assets Worker serving `./dist`, SPA fallback)
+
+### Project 2 — API (`workers/`)
+- Connect the same repo → **Set root directory = `workers`**
+- Build command: `npm ci` (optional)
+- Deploy command: `npx wrangler deploy`
+- Uses `workers/wrangler.toml`
+- Add secrets once via `wrangler secret put …` (see §3) — Workers Builds keeps them
+- Set `[vars]` `SUPABASE_URL`, `ALLOWED_ORIGINS`, `ENVIRONMENT` in `workers/wrangler.toml`
+
+Result: the frontend Worker serves the built SPA, the API Worker serves `/api/v1`,
+and neither runs the Python backend. The earlier `academic-management-system254`
+worker name is reused by `frontend/wrangler.jsonc`, so the next build replaces the
+broken deploy.
+
+> Prefer Cloudflare Pages for the frontend instead? Use §4 below — but do **not**
+> also run the root `wrangler deploy`, or you get the raw-source deploy shown above.
+
+---
+
+## 4. Cloudflare Pages setup (Frontend) — alternative to 3b Project 1
 
 ### Option A — GitHub automatic (recommended)
 
