@@ -3,7 +3,7 @@
 **System documentation (complete project reference)**  
 **Institution:** Thika Technical Training Institute (TTTI)  
 **Product name:** Academic Management System (TTTI AMS)  
-**Document version:** 1.0  
+**Document version:** 2.0  
 **Last updated:** July 2026  
 
 ---
@@ -23,12 +23,13 @@ TTTI AMS is a full-stack institutional platform that digitises academic and admi
 | Industrial attachment | Placement, GPS check-in/out, digital logbook, mentor competency, liaison oversight |
 | Operations | Notices, notifications, audit logs, biometric classroom attendance, academic trips |
 | Oversight | Registrar, Deputy Principal, Quality Assurance, CDACC external verification |
-| Support | Workshop inventory, service-desk clearance, AI help Q&A |
+| Support | Workshop inventory, service-desk clearance |
 
 ### Out of scope / incomplete areas
 
-- **Employer job board:** Schema tables exist (`employers`, `job_postings`, `job_applications`); a dedicated employer portal blueprint is not fully wired like other roles.
-- **React SPA:** Incremental migration only — Jinja portals remain the production default for most roles.
+- **Employer job board:** Schema tables exist (`employers`, `job_postings`, `job_applications`); a dedicated employer portal is not fully wired like other roles.
+- **Live biometric device POST:** BioEntry hardware scan/enroll needs an optional device host or Durable Objects (in-memory Flask sessions are not Workers-compatible). Scanner registry and manual attendance run on Cloudflare.
+- **Excel (openpyxl) bulk import/export:** Optional legacy Flask host via `VITE_LEGACY_ORIGIN`. Browser print/PDF is Cloudflare-native.
 
 ---
 
@@ -36,16 +37,18 @@ TTTI AMS is a full-stack institutional platform that digitises academic and admi
 
 | Item | Detail |
 |---|---|
-| Repository | `THIKA-TECHNICAL-ACADEMIC-MANAGEMENT-SYSTEM` |
-| Backend entry | `app.py` → Gunicorn `app:app` |
-| Primary UI | Server-rendered Jinja2 templates under `templates/` |
-| Secondary UI | React 18 + Vite SPA under `frontend/` (talks to `/api/v1`) |
+| Repository | `ACADEMIC-MANAGEMENT-SYSTEM254` (`alexfreed254`) |
+| Production UI | React 18 + Vite + TypeScript SPA (`frontend/`) |
+| Production API | Cloudflare Workers + Hono (`workers/src`) at `/api/v1` |
+| Deploy entry | Repo-root `wrangler.jsonc` → Worker `academic-management-system254` |
 | Database | Supabase PostgreSQL (+ RLS policies) |
-| Auth (staff) | Supabase Auth (email + password → JWT) |
-| Auth (trainees) | Admission number + password hash on `user_profiles` |
+| Auth (staff) | Supabase Auth (email + password) → Worker issues session JWT |
+| Auth (trainees) | Admission number + `user_profiles.password_hash` → Worker session JWT |
 | File storage | Supabase Storage buckets |
-| Hosting | Render (Python web service; auto-deploy from GitHub) |
-| Runtime | Python **3.12.9** (`runtime.txt`) |
+| Hosting | **Cloudflare** (DNS, SSL/TLS, CDN, WAF, DDoS) + Worker Assets (SPA) + Worker API |
+| Legacy reference | Flask (`app.py`) + Jinja `templates/` — not required for core SPA production |
+
+Canonical inventory: `MIGRATION_INVENTORY.md`. Deploy cheat sheet: `CLOUDFLARE.md`.
 
 ---
 
@@ -53,28 +56,19 @@ TTTI AMS is a full-stack institutional platform that digitises academic and admi
 
 | Layer | Technology |
 |---|---|
-| Language / runtime | Python 3.12.9 |
-| Web framework | Flask 3.0.3 |
-| WSGI server | Gunicorn 22 |
-| Auth / CSRF | Flask-WTF · Werkzeug password hashing |
-| Rate limiting | Flask-Limiter |
-| CORS (SPA) | flask-cors (scoped to `/api/*`) |
-| Database client | supabase-py (service role + anon) |
-| Timezone | pytz (Africa/Nairobi display filters) |
-| PDF | ReportLab |
-| Excel | openpyxl |
-| Images | Pillow |
-| Frontend (legacy/current portals) | Jinja2 · Tailwind CDN · Font Awesome |
-| Frontend (SPA) | React 18 · Vite · React Router · TanStack Query · Axios · Tailwind 4 |
-| Config | python-dotenv |
+| Edge / hosting | Cloudflare Workers · Worker Assets · Wrangler 4 |
+| API framework | Hono + TypeScript (`workers/`) |
+| Validation | Zod (where used) |
+| Password verify | WebCrypto PBKDF2 + `scrypt-js` (Werkzeug hash compatible) |
+| Session | Signed HS256 JWT (`Authorization: Bearer`), ~24 h |
+| Database client | `@supabase/supabase-js` (service role server-side; anon for staff login) |
+| Frontend | React 18 · Vite · TypeScript · React Router · TanStack Query · Axios · Tailwind |
+| Reports | Browser print pages (`PrintReportPages` + `/api/v1/print/*`) |
+| Timezone display | Africa/Nairobi in SPA where formatted |
 
-### Key Python packages (`requirements.txt`)
+### Legacy Python stack (optional device / Excel host only)
 
-```
-Flask, flask-cors, Flask-WTF, Flask-Limiter, gunicorn,
-supabase, gotrue, python-dotenv, Werkzeug, pytz,
-openpyxl, pillow, email-validator, reportlab
-```
+Flask, Gunicorn, ReportLab, openpyxl, Pillow — retained in-repo for biometric device APIs and Excel exporters if still needed. Not part of the Cloudflare production path.
 
 ---
 
@@ -83,93 +77,92 @@ openpyxl, pillow, email-validator, reportlab
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         Browsers                            │
-│  Jinja portals (all roles)     React SPA (partial migrate)  │
-└───────────────┬───────────────────────────┬─────────────────┘
-                │ HTML routes               │ /api/v1 + cookies
-                ▼                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Render — Gunicorn → Flask (`app.py`)           │
-│  Blueprints · CSRF · Rate limits · Session · Role guards    │
+│         React SPA (all roles) — TypeScript portals          │
 └─────────────────────────────┬───────────────────────────────┘
-                              │
+                              │ HTTPS (same origin)
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Cloudflare Worker (`academic-management-system254`)        │
+│  /api/*  → Hono (auth · RBAC · business logic · uploads)    │
+│  /*      → frontend/dist (SPA, not_found_handling)          │
+└─────────────────────────────┬───────────────────────────────┘
+                              │ service-role key (runtime secret)
           ┌───────────────────┼───────────────────┐
           ▼                   ▼                   ▼
    Supabase Auth        Supabase DB         Supabase Storage
-   (staff JWT)          (PostgreSQL+RLS)    (files / media)
+   (staff GoTrue)       (PostgreSQL+RLS)    (files / media)
 ```
+
+**Note:** Separate Cloudflare Pages + API Worker is **obsolete**. Worker Assets fulfill the “Pages” role on the same Worker.
 
 ### Design principles
 
-1. **Role-based portals** — each role has a URL prefix and template set.
+1. **Role-based portals** — each role has a URL prefix and React portal shell (sidebar/theme from former Jinja `base.html`).
 2. **Department isolation** — dept admins and trainers are scoped to their department / assigned units.
-3. **Dual authentication** — staff use Supabase Auth; trainees use local password hashes (no trainee JWT).
-4. **Defence in depth** — Python decorators + Supabase RLS + CSRF + upload validation + audit logs.
-5. **Incremental SPA** — React replaces screens gradually; Jinja remains authoritative until parity.
+3. **Dual authentication** — staff use Supabase Auth; trainees use local password hashes; both receive Worker session JWTs.
+4. **Defence in depth** — Workers middleware RBAC + Supabase RLS + upload validation + audit logs.
+5. **Cloudflare-first SPA** — React is production UI; Jinja templates are historical reference.
 
 ---
 
 ## 5. Application structure
 
-### 5.1 Important root modules
+### 5.1 Important production modules
 
-| File | Role |
+| Path | Role |
 |---|---|
-| `app.py` | Flask app, session/cookie config, CSRF/limiter init, blueprint registration, error handlers, Jinja globals |
-| `auth_utils.py` | Login helpers, roles, RBAC decorators, audit log, session refresh |
-| `db.py` | Supabase anon / service / user-token clients |
-| `extensions.py` | Shared `csrf` and `limiter` instances |
-| `security_utils.py` | Session-safe profiles, upload rules, search sanitisation, safe redirects, service-desk role maps |
-| `notifications.py` | Create / list / mark-read notifications; notice recall |
-| `grading_utils.py` | TVET CDACC competency grading scale |
-| `report_utils.py` | Shared PDF header / signature helpers |
-| `stats_utils.py` | Aggregated statistics helpers |
-| `exam_booking_form1a.py` | Exam booking form generation |
-| `academic_result_transcript.py` | Transcript PDF helpers |
-| `unit_attendance_register.py` | Attendance register PDF helpers |
+| `wrangler.jsonc` | Unified Worker: build SPA, bind assets, `run_worker_first: ["/api/*"]` |
+| `workers/src/index.ts` | Hono app, CORS, `/api/health`, mounts `/api/v1` |
+| `workers/src/middleware/auth.ts` | `requireAuth` / `requireRole` / password-change gate |
+| `workers/src/lib/*` | Supabase clients, session JWT, passwords, audit, print payloads, storage upload |
+| `workers/src/routes/*` | auth, notifications, trainer, student, admin, roles, shared, mutations, public, print |
+| `frontend/src/routes/AppRouter.tsx` | React Router — all portal routes |
+| `frontend/src/config/navigation.ts` | Role themes, sidebars, `getRoleHome` |
+| `frontend/src/lib/apiClient.ts` | Axios + Bearer token |
 
 ### 5.2 Top-level layout
 
 ```
-THIKA TECHNICAL ACADEMIC MANAGEMENT SYSTEM/
-├── app.py
-├── auth_utils.py, db.py, extensions.py, security_utils.py, …
-├── routes/                 # Flask blueprints
-├── templates/              # Jinja portals per role
-├── static/                 # CSS, JS (csrf.js, secure-dom.js), assets
-├── frontend/               # React + Vite SPA
-├── assets/                 # Brand images
-├── supabase_schema.sql     # Base schema
-├── *_migration.sql         # Incremental DB migrations
-├── requirements.txt
-├── runtime.txt
-├── Procfile / render.yaml
-└── README.md / this document
+ACADEMIC MANAGEMENT SYSTEM/
+├── wrangler.jsonc              # Production Cloudflare config
+├── package.json                # npm run deploy | dev | check
+├── workers/                    # Hono + TypeScript API
+├── frontend/                   # React + Vite SPA
+├── templates/                  # Legacy Jinja (reference only)
+├── routes/ · app.py · …        # Legacy Flask (optional host)
+├── supabase_schema.sql
+├── *_migration.sql
+├── MIGRATION_INVENTORY.md
+├── CLOUDFLARE.md
+├── DEPLOYMENT.md
+└── SYSTEM_DOCUMENTATION.md     # this file
 ```
 
-### 5.3 Blueprint map
+### 5.3 Portal URL map (React SPA)
 
-| Blueprint | URL prefix | Primary users |
+| Portal | URL prefix | Primary users |
 |---|---|---|
-| `main` | `/` | Public landing / redirects |
-| `auth` | `/auth` | All users (login, logout, profile, password) |
-| `api_v1` | `/api/v1` | React SPA |
-| `super_admin` | `/super-admin` | Super Admin |
-| `dept_admin` | `/dept-admin` | Department Admin |
-| `trainer` | `/trainer` | Trainer |
-| `student` | `/student` | Trainee |
-| `examination_officer` | `/examination-officer` | Examination Officer |
-| `industry_mentor` | `/industry-mentor` | Industry Mentor |
-| `internal_verifier` | `/internal-verifier` | Internal Verifier |
-| `clearance` | `/clearance` | Students + clearance approvers |
-| `admin_oversight` | `/admin-oversight` | Registrar, DP, QA |
-| `notifications` | `/notifications` | All authenticated users |
-| `liaison_officer` | `/liaison-officer` | Liaison Officer |
-| `cdacc_verifier` | `/cdacc-verifier` | CDACC Verifier |
-| `workshop_technician` | `/workshop-technician` | Workshop Technician |
-| `biometric` | `/biometric` | Trainers + hardware devices |
-| `service_dept` | `/service-dept` | Library / Sports / Service clearance |
-| `academic_trips` | `/academic-trips` | Trips coordinators / reviewers |
-| `summative` | `/summative` | Trainers / Dept Admin / Super Admin |
+| Public | `/`, `/about`, `/apply`, `/contact` | Guests |
+| Auth | `/login`, `/auth/*` | All users |
+| Super Admin | `/super-admin` | Super Admin |
+| Dept Admin | `/dept-admin` | Department Admin |
+| Trainer | `/trainer` | Trainer |
+| Student | `/student` | Trainee |
+| Examination Officer | `/examination-officer` | Examination Officer |
+| Industry Mentor | `/industry-mentor` | Industry Mentor |
+| Internal Verifier | `/internal-verifier` | Internal Verifier |
+| Clearance | `/clearance` | Students + clearance approvers |
+| Admin Oversight | `/admin-oversight` | Registrar, DP, QA |
+| Notifications | `/notifications` | All authenticated users |
+| Liaison Officer | `/liaison-officer` | Liaison Officer |
+| CDACC Verifier | `/cdacc-verifier` | CDACC Verifier |
+| Workshop Technician | `/workshop-technician` | Workshop Technician |
+| Service Dept | `/service-dept` | Library / Sports / Service clearance |
+| Academic trips | `/academic-trips` | Trainers / admins |
+| Summative | `/summative` | Trainers / Dept Admin / Super Admin |
+| Biometric (hub) | `/biometric` | Trainers + scanner registry UI |
+
+API: all JSON under `/api/v1/*` on the same Worker.
 
 ---
 
@@ -177,46 +170,49 @@ THIKA TECHNICAL ACADEMIC MANAGEMENT SYSTEM/
 
 ### 6.1 Login model
 
-| Portal tab | Identifier | Password store | Session tokens |
+| Portal tab | Identifier | Password store | Session |
 |---|---|---|---|
-| **Staff / Admin** | Institutional **email only** | Supabase Auth | Flask session + JWT access/refresh |
-| **Trainee** | **Admission number only** | `user_profiles.password_hash` (Werkzeug) | Flask session only (no JWT) |
+| **Staff / Admin** | Institutional **email only** | Supabase Auth | Worker HS256 session JWT (Bearer) |
+| **Trainee** | **Admission number only** | `user_profiles.password_hash` (Werkzeug) | Worker HS256 session JWT (Bearer) |
 
-Login UI: `/auth/login` (split hero design). Staff and trainee fields are mutually exclusive (inactive field is disabled so it is not submitted).
+Login UI: `/login` (split hero; staff vs trainee tabs).
 
-### 6.2 Session keys
+### 6.2 Session
 
-- `sb_user` — safe profile subset (never includes `password_hash`)
-- `sb_access_token` / `sb_refresh_token` — staff JWT pair
-- Cookie: `HttpOnly`; `Secure` in production; `SameSite=Lax` (or `None` when `SPA_CROSS_SITE=true`)
-- Lifetime: 1 day (`PERMANENT_SESSION_LIFETIME`)
+- Token stored in `sessionStorage` (`ttti_access_token`)
+- Sent as `Authorization: Bearer <jwt>`
+- Lifetime ~1 day; signed with `SESSION_SECRET`
+- JWT payload carries safe profile fields (never `password_hash`)
 
-### 6.3 Auth routes (`/auth`)
+### 6.3 Auth routes
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/auth/login` | GET/POST | Dual login (rate-limited) |
-| `/auth/logout` | GET | Clear session immediately; audit in background |
-| `/auth/forgot-password` | GET/POST | Self-reset disabled — directs trainees to admin |
-| `/auth/change-password` | GET/POST | Forced/optional password change |
-| `/auth/profile` | GET/POST | Profile management |
-| `/auth/student/register` | GET/POST | Optional self-registration (`ALLOW_STUDENT_SELF_REGISTER`) |
+| `/login` | SPA | Dual login UI |
+| `/api/v1/auth/login` | POST | Issue session JWT |
+| `/api/v1/auth/logout` | POST | Invalidate client session; audit |
+| `/api/v1/auth/me` | GET | Current profile |
+| `/api/v1/csrf-token` | GET | Compatibility no-op for SPA |
+| `/auth/forgot-password` | SPA + API | Staff: Supabase reset email; trainees: contact admin |
+| `/auth/change-password` | SPA + API | Forced/optional password change |
+| `/auth/profile` | SPA + API | Profile management |
+| `/auth/student-register` | SPA + API | Optional (`ALLOW_STUDENT_SELF_REGISTER`) |
 
-### 6.4 Post-login redirects (examples)
+### 6.4 Post-login redirects
 
 | Role | Landing |
 |---|---|
-| `super_admin` | `/super-admin/` |
-| `dept_admin` | `/dept-admin/` |
-| `trainer` | `/trainer/` |
+| `super_admin` | `/super-admin/dashboard` |
+| `dept_admin` | `/dept-admin/dashboard` |
+| `trainer` | `/trainer/dashboard` |
 | `student` | `/student/dashboard` |
-| `examination_officer` | `/examination-officer/` |
-| `industry_mentor` | `/industry-mentor/` |
-| `internal_verifier` | `/internal-verifier/` |
-| `liaison_officer` | `/liaison-officer/` |
-| `cdacc_verifier` | `/cdacc-verifier/` |
-| `workshop_technician` | `/workshop-technician/` |
-| `library_hod` / `sports_hod` / `service_clearance_officer` | `/service-dept/` |
+| `examination_officer` | `/examination-officer/dashboard` |
+| `industry_mentor` | `/industry-mentor/dashboard` |
+| `internal_verifier` | `/internal-verifier/dashboard` |
+| `liaison_officer` | `/liaison-officer/dashboard` |
+| `cdacc_verifier` | `/cdacc-verifier/dashboard` |
+| `workshop_technician` | `/workshop-technician/dashboard` |
+| `library_hod` / `sports_hod` / `service_clearance_officer` | `/service-dept/dashboard` |
 | `environment_hod` / `dean_students` / `finance_officer` | `/clearance/approver` |
 | `registrar` | `/admin-oversight/registrar` |
 | `deputy_principal` | `/admin-oversight/deputy-principal` |
@@ -224,7 +220,7 @@ Login UI: `/auth/login` (split hero design). Staff and trainee fields are mutual
 
 ### 6.5 Password policy hooks
 
-- `must_change_password` on profile blocks most routes until `/auth/change-password` succeeds (HTML + API).
+- `must_change_password` blocks API/portals until `/auth/change-password` succeeds.
 - Temporary passwords set by admins should flip this flag.
 
 ---
@@ -239,14 +235,14 @@ Login UI: `/auth/login` (split hero design). Staff and trainee fields are mutual
 
 **Trainee role:** `student`
 
-**Hardware:** biometric devices authenticate with `BIOMETRIC_DEVICE_SECRET` (not a user role).
+**Hardware:** biometric devices authenticate with `BIOMETRIC_DEVICE_SECRET` on an optional device host (not a user role).
 
 ### 7.2 Enforcement layers
 
-1. **Decorators** — `@login_required`, `@role_required(...)`, portal helpers (`student_required`, `trainer_required`, …)
-2. **Query scoping** — department / class / unit ownership checks in route logic
-3. **Supabase RLS** — row-level policies in schema/migrations
-4. **Service desks** — `SERVICE_DEPT_ROLES` maps clearance categories to allowed roles
+1. **Workers middleware** — `requireAuth`, `requireRole(...)`
+2. **Query scoping** — department / class / unit ownership in route logic
+3. **Supabase RLS** — defence-in-depth (service role used server-side)
+4. **Service desks** — category → role maps for clearance
 
 ---
 
@@ -261,47 +257,47 @@ Institution-wide control plane:
 - Cross-department attendance, assessments, marks  
 - Exam booking oversight  
 - Clearance and attachment viewers  
-- GIS / location exports  
+- GIS / location views  
 - Companies, notices, audit logs (`system_logs`)  
-- Data import tools  
+- Data import stubs / tools  
 - Biometric scanner registry  
 
 ### 8.2 Department Admin (`/dept-admin`)
 
 Department-scoped academic administration:
 
-- Classes, units, trainers, students (enrol / export)  
-- Attendance matrices and PDF registers  
-- Exam booking approve/reject (+ PDF/Excel)  
+- Classes, units, trainers, students  
+- Attendance and print registers  
+- Exam booking approve/reject  
 - Marks reports  
 - Trainer POE and trainee documents  
 - Industrial attachment management and companies  
 - Notices to department users  
-- Credentials view / password reset initiation  
-- Fingerprint ID enrolment for trainees  
+- Credentials / password reset initiation  
+- Fingerprint registration status  
 
 ### 8.3 Trainer (`/trainer`)
 
 Teaching delivery for assigned classes/units:
 
-- Dashboard (pending attendance, quick links)  
-- Live lesson attendance  
+- Dashboard  
+- Live lesson attendance (+ browser print session)  
 - Assessment review / formative marks entry  
-- Marks import/export  
-- POE uploads  
-- Biometric lesson sessions  
+- Marks print; optional Excel via legacy host  
+- POE uploads / portfolio  
+- Biometric hub → manual attendance  
 
 ### 8.4 Trainee / Student (`/student`)
 
 Learner self-service:
 
-- Dashboard (attendance %, assessments, attachment, clearance snapshot)  
+- Dashboard  
 - Profile and personal documents  
-- Units, lesson attendance, marks / result slip  
+- Units, lesson attendance, marks / print transcript  
 - Assessments + evidence upload  
 - Exam booking form and history  
 - Portfolio of Evidence  
-- Industrial attachment (request, acceptance letter, GPS check-in/out, logbook)  
+- Industrial attachment (placement, logbook, GPS where enabled)  
 - Attachment marks and mentoring tool uploads  
 - Employment status / projects  
 - Summative competence (read-only view of own results)  
@@ -310,36 +306,33 @@ Learner self-service:
 ### 8.5 Examination Officer (`/examination-officer`)
 
 - Confirm approved exam bookings  
-- Read-only marks views / PDFs  
+- Read-only marks views / print  
 
 ### 8.6 Clearance (`/clearance`)
 
 Multi-stage course clearance workflow:
 
-- Student initiates / can stop (cancel) a request  
-- Approvers act by stage and department/service  
-- Approve, reject, return for correction, waive  
-- Certificate generation and PDF  
+- Student initiates a request  
+- Approvers act by stage and department/service (approve / reject)  
+- Certificate (print-friendly)  
 - Public verify by serial (`/clearance/verify`)  
-- Service-desk and lost-items support  
+- Service-desk queues  
 
 ### 8.7 Industrial attachment
 
-End-to-end workplace learning:
-
 | Actor | Actions |
 |---|---|
-| Trainee | Apply, upload acceptance letter, GPS check-in/out, logbook |
-| Liaison Officer | Periods, approvals, companies, grading, exports |
-| Industry Mentor | Logbook approve/reject, competency (NYC/C/P/M), GPS monitor |
-| Internal Verifier | Verify competencies; compliance reports |
-| Dept / Super Admin | Oversight and exports |
+| Trainee | Apply, acceptance letter, GPS/logbook (SPA + API) |
+| Liaison Officer | Periods, approvals, companies, grading |
+| Industry Mentor | Logbook approve/reject, competency, location |
+| Internal Verifier | Verify competencies; reports |
+| Dept / Super Admin | Oversight |
 
 ### 8.8 Summative assessment (`/summative`)
 
 TVET CDACC competence entry and reporting:
 
-| Level | Meaning (grading utils) |
+| Level | Meaning |
 |---|---|
 | Mastery (M) | 80–100% |
 | Proficient (P) | 65–79% |
@@ -347,53 +340,52 @@ TVET CDACC competence entry and reporting:
 | Not Yet Competent (NYC) | 0–49% |
 | CRNM | Course Requirement Not Met |
 
-Features: competence entry grid, unit performance analysis, Excel/PDF reports, graduation list (admin).
+Features: hub, competence entry, unit performance analysis, reports, graduation list + print.
 
 ### 8.9 Biometric attendance (`/biometric`)
 
-- Trainer starts a classroom biometric session  
-- Device POSTs scans to CSRF-exempt APIs with shared secret  
-- Matches `biometric_id` / fingerprint IDs on enrolled trainees  
-- Writes standard `attendance` rows  
+- Scanner registry (Super Admin) on Cloudflare  
+- Manual class attendance on Cloudflare  
+- Device POST scan/enroll: optional non-Worker host until Durable Objects / `biometric_sessions` port  
 
 ### 8.10 Academic trips (`/academic-trips`)
 
-- Trip records and media uploads (`trip-media` bucket)  
-- Trainer/coordinator upload; dept/super review  
+- Trip records and media uploads (`trip-media` bucket) via Workers  
+- List, upload, detail, media pages in SPA  
 
 ### 8.11 Notifications (`/notifications`)
 
-- In-app bell on portals  
-- Created on workflow events  
-- Mark read / mark all  
-- Sender recall supported via `sender_id` / `notice_id` columns  
+- In-app notifications via `/api/v1/notifications/*`  
+- Mark read / counts  
 
 ### 8.12 Other portals
 
 | Portal | Focus |
 |---|---|
 | CDACC Verifier | External verification of assessments, marks, trainer/trainee POE |
-| Workshop Technician | Workshop inventory + clearance for workshop |
-| Service Dept | Library / Sports / service clearance desks + lost items |
-| Admin Oversight | Registrar, Deputy Principal, QA read/approve views |
+| Workshop Technician | Workshop inventory + clearance approvals |
+| Service Dept | Library / Sports / service clearance desks |
+| Admin Oversight | Registrar, Deputy Principal, QA views |
 
-### 8.13 REST API v1 (`/api/v1`) — SPA backend
+### 8.13 REST API v1 (`/api/v1`)
 
-Cookie-session API used by the React app:
+Bearer-token API used by the React app (~238 endpoints), including:
 
-- `GET /csrf-token`  
-- `POST /auth/login` · `POST /auth/logout` · `GET /auth/me`  
-- Notifications recent/count  
-- Trainer: dashboard, marks-entry, assessments, attendance  
-- Student: dashboard, attendance, units, marks  
+- Auth, profile, password, forgot-password, student register  
+- Notifications  
+- Trainer / student dashboards and workflows  
+- Admin + role portal GETs  
+- Mutations (CRUD, clearance, exams, attachment, uploads)  
+- Public apply + departments  
+- Print payloads for browser PDF  
 
-CORS origins from `SPA_ORIGINS` (default localhost Vite ports).
+CORS: `ALLOWED_ORIGINS` + same Worker origin.
 
 ---
 
 ## 9. Grading standard (TVET CDACC)
 
-All formative percentage displays and summative competence should align to:
+All formative percentage displays and summative competence align to:
 
 | Marks range | Grade | Code | Meaning |
 |---|---|---|---|
@@ -403,7 +395,7 @@ All formative percentage displays and summative competence should align to:
 | 0–49% | Not Yet Competent | NYC | Further training / reassessment needed |
 | — | CRNM | CRNM | Course requirement not met |
 
-Shared implementation: `grading_utils.py`.
+Shared rules: `grading_utils.py` (legacy) and Workers/SPA (`printPayloads`, marks helpers, summative entry validation).
 
 ---
 
@@ -412,14 +404,14 @@ Shared implementation: `grading_utils.py`.
 ### 10.1 Platform
 
 - **Engine:** PostgreSQL via Supabase  
-- **Access from app:** service-role client for server operations; anon/user clients where appropriate  
-- **Security:** Row Level Security (RLS) policies in schema  
+- **Access from Worker:** service-role client for server operations; anon client for staff GoTrue login  
+- **Security:** Row Level Security (RLS) in schema + `rls_hardening_migration.sql`
 
 ### 10.2 Core tables (base schema)
 
 **Organisation:** `departments`, `courses`, `classes`, `units`, `class_units`, `trainer_units`, `enrollments`  
 
-**People:** `user_profiles` (central identity; roles; admission/staff numbers; password_hash for students)  
+**People:** `user_profiles`  
 
 **Teaching:** `attendance`, `class_events`, `formative_assessments`, `formative_marks`, `assessments`, `evidence`, `marks`  
 
@@ -427,7 +419,7 @@ Shared implementation: `grading_utils.py`.
 
 **Documents:** `trainer_documents`, `trainee_documents`, `student_personal_documents`  
 
-**Attachment:** `companies`, `mentors`, `industrial_attachments`, `location_logs`, `digital_logbook`, `competency_tracking` (+ workflow tables from migrations)  
+**Attachment:** `companies`, `mentors`, `industrial_attachments`, `location_logs`, `digital_logbook`, `competency_tracking` (+ workflow migrations)  
 
 **Clearance:** `clearance_departments`, `clearance_stages`, `clearance_requests`, `clearance_approvals` (+ lost items)  
 
@@ -457,9 +449,10 @@ Shared implementation: `grading_utils.py`.
 | `trainer_documents_update_migration.sql` | Extra trainer POE document types |
 | `migration_student_documents.sql` | Student personal documents |
 | `fix_course_applications_fk_migration.sql` | Course applications FK fix |
+| `rls_hardening_migration.sql` | RLS enablement / policy hardening |
 | `verify_deployment.sql` | Post-deploy verification queries |
 
-**Base schema file:** `supabase_schema.sql` (run first on a new project, then apply migrations in dependency order).
+**Base schema file:** `supabase_schema.sql` (run first, then migrations in dependency order).
 
 ### 10.4 Storage buckets (typical)
 
@@ -467,8 +460,9 @@ Shared implementation: `grading_utils.py`.
 |---|---|
 | `assessment-scripts` | Assessment scripts |
 | `assessment-evidence` | Evidence files |
-| `documents` | General documents / POE |
+| `application-documents` | Course application uploads |
 | `trip-media` | Academic trip photos/media |
+| `mentoring-tools` | Mentoring tool uploads |
 
 Optional `PRIVATE_STORAGE=true` uses signed URLs instead of public object URLs.
 
@@ -476,23 +470,19 @@ Optional `PRIVATE_STORAGE=true` uses signed URLs instead of public object URLs.
 
 ## 11. Frontend
 
-### 11.1 Jinja portals (production default)
-
-- Located in `templates/{role}/` with shared patterns (sidebar, topbar, notifications, logos).  
-- Brand assets via `LOGO_URL` / `GOVT_LOGO_URL` from `app.py` context processor.  
-- Client helpers: `static/js/csrf.js`, `static/js/secure-dom.js`, optional SPA-like navigation script.
-
-### 11.2 React SPA (`frontend/`)
+### 11.1 React SPA (`frontend/`) — production UI
 
 | Item | Detail |
 |---|---|
-| Stack | React 18, Vite, React Router, TanStack Query, Axios, Tailwind 4 |
-| API | Flask `/api/v1` with credentials (session cookies) |
-| Migrated areas | Auth login; trainer dashboard/marks/assessments/attendance; student dashboard/attendance/units/marks |
-| Unfinished | Placeholder screens linking back to Jinja (`VITE_LEGACY_ORIGIN`) |
-| Local | Vite `:5173` proxies `/api` and `/static` to Flask `:5000` |
+| Stack | React 18, Vite, TypeScript, React Router, TanStack Query, Axios, Tailwind |
+| API | Same-origin `/api/v1` with Bearer JWT (`VITE_API_BASE_URL` empty) |
+| Shells | `PortalShell` + role themes/nav from `navigation.ts` |
+| Reports | `/.../print` browser print pages |
+| Local | `npm run dev` from repo root (Wrangler serves SPA + API) |
 
-**Policy:** Do not remove Jinja portals until SPA feature parity for that role is complete.
+### 11.2 Jinja templates (`templates/`)
+
+Historical reference transcribed into React. Not served by the Cloudflare Worker. Do not treat Jinja as production UI.
 
 ---
 
@@ -500,78 +490,64 @@ Optional `PRIVATE_STORAGE=true` uses signed URLs instead of public object URLs.
 
 | Control | Implementation |
 |---|---|
-| Secrets | `SECRET_KEY` required in production |
-| Session hygiene | `session_safe_profile()` strips password hashes |
-| CSRF | Flask-WTF on POSTs; tokens in forms + `csrf.js`; SPA `/api/v1/csrf-token` |
-| Rate limits | Login / register / forgot-password limited per IP |
-| Uploads | Extension allow-lists, size limits (`MAX_CONTENT_LENGTH` 25 MB) |
-| Search | Metacharacter sanitisation for PostgREST filters |
-| Redirects | Same-host only (`safe_redirect_url`) |
-| Password gate | `must_change_password` blocks portals until changed |
-| Biometric API | Shared secret; CSRF exempt only for device endpoints |
-| Audit | `write_audit_log` → `system_logs` |
-| Proxy | `ProxyFix` for Render TLS / client IP |
-| Cookies | Secure + HttpOnly in production |
+| Secrets | Worker runtime: `SESSION_SECRET`, Supabase keys — never in SPA |
+| Session hygiene | JWT/profile strip password hashes |
+| Auth API | Bearer JWT; CSRF token endpoint retained for compatibility |
+| Rate limits | Cloudflare WAF rules (edge) for login |
+| Uploads | Extension allow-lists, size limits on Worker routes |
+| Password gate | `must_change_password` in middleware |
+| Biometric API | Shared secret on optional device host |
+| Audit | `writeAuditLog` → `system_logs` (`waitUntil`) |
 
-Forgot-password self-service for trainees is **disabled** (prevents admission-number takeover). Resets are admin-assisted.
+Forgot-password self-service for trainees remains **admin-assisted** (prevents admission-number takeover).
 
 ---
 
 ## 13. Configuration and deployment
 
-### 13.1 Required environment variables
+### 13.1 Required Worker runtime secrets
 
 | Variable | Purpose |
 |---|---|
-| `SECRET_KEY` | Flask session / CSRF signing |
+| `SUPABASE_ANON_KEY` | Staff GoTrue login |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server DB / Storage |
+| `SESSION_SECRET` | Signs session JWTs |
+
+### 13.2 Non-secret vars (`wrangler.jsonc`)
+
+| Variable | Purpose |
+|---|---|
 | `SUPABASE_URL` | Project URL |
-| `SUPABASE_ANON_KEY` | Anon key (RLS-honouring client) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role (server-side) |
+| `ALLOWED_ORIGINS` | CORS allow-list (plus same origin) |
+| `ENVIRONMENT` | Label in `/api/health` |
 
-### 13.2 Optional environment variables
+### 13.3 Optional
 
 | Variable | Purpose |
 |---|---|
-| `FLASK_ENV` | development / production |
-| `SETUP_PROFILE_TOKEN` | Gate sensitive setup profile routes |
-| `BIOMETRIC_DEVICE_SECRET` | Device API authentication |
+| `ALLOW_STUDENT_SELF_REGISTER` | Public trainee registration |
 | `PRIVATE_STORAGE` | Prefer signed storage URLs |
-| `ALLOW_STUDENT_SELF_REGISTER` | Enable public trainee registration |
-| `SPA_ORIGINS` | Comma-separated CORS origins for SPA |
-| `SPA_CROSS_SITE` | Cross-site cookies (`SameSite=None`) |
-| `SESSION_COOKIE_SECURE` | Force Secure cookies |
-| `PORT` | Listen port (Render sets this) |
+| `VITE_API_BASE_URL` | Leave empty for same-origin |
+| `VITE_LEGACY_ORIGIN` | Optional Flask for Excel / biometric device |
+| `BIOMETRIC_DEVICE_SECRET` | Device host only |
+| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` | GitHub Actions deploy |
 
-### 13.3 SPA env (`frontend/.env`)
+### 13.4 Deploy (Cloudflare)
 
-- `VITE_API_BASE_URL` — Flask API origin  
-- `VITE_LEGACY_ORIGIN` — Jinja fallback links  
-- Optional socket URL if used  
+1. Apply `supabase_schema.sql` + migrations on Supabase; create storage buckets.  
+2. Set Worker **runtime** secrets on `academic-management-system254`.  
+3. From repo root: `npm run deploy` (or CI `.github/workflows/deploy.yml`).  
+4. Verify `GET /api/health` → `ready: true`.  
 
-### 13.4 Deploy (Render)
-
-1. Connect GitHub repository.  
-2. Build: `pip install -r requirements.txt`  
-3. Start: `gunicorn app:app` (see `Procfile` / `render.yaml`)  
-4. Set env vars in Render dashboard.  
-5. Apply `supabase_schema.sql` + pending `*_migration.sql` on Supabase.  
-6. Create storage buckets and policies.  
-
-Local run:
+Local:
 
 ```bash
-pip install -r requirements.txt
-flask --app app run
-# or: python app.py
-```
-
-SPA local:
-
-```bash
-cd frontend
-npm install
+cp workers/.dev.vars.example workers/.dev.vars
+npm run check
 npm run dev
 ```
+
+**Do not** deploy `frontend/wrangler.jsonc` or `workers/wrangler.toml`.
 
 ---
 
@@ -587,40 +563,35 @@ npm run dev
 ### Teaching journey
 
 1. Dept Admin assigns trainers to class/units.  
-2. Trainer marks attendance (manual or biometric).  
+2. Trainer marks attendance (manual; biometric device optional host).  
 3. Trainer enters formative marks / reviews assessments.  
 4. Summative competence entered via `/summative`.  
-5. Exam bookings flow: student → dept approval → examination officer confirmation.  
+5. Exam bookings: student → dept approval → examination officer confirmation.  
 
 ### Clearance journey
 
 1. Eligible trainee starts clearance.  
-2. Stage 1 / Stage 2 approvers act (academic + service desks).  
+2. Approvers act (academic + service desks).  
 3. Certificate issued; public verify by serial.  
-4. Trainee may cancel an in-progress request (migration-supported).  
 
 ### Attachment journey
 
 1. Placement period opened by liaison / admin.  
 2. Trainee applies + uploads acceptance letter.  
 3. Mentors approve logbook and competencies.  
-4. GPS check-ins recorded; liaison grades / exports.  
+4. GPS/logbook recorded; liaison grades.  
 
 ---
 
 ## 15. Error pages and UX notes
 
-| Code | Template | Notes |
+| Code | SPA | Notes |
 |---|---|---|
-| 400 | `templates/errors/400.html` | Generic bad request |
-| CSRF | Redirect to `/auth/login` with flash | Prefer this over raw 400 for auth forms |
-| 403 | `templates/errors/403.html` | Forbidden / wrong role |
-| 404 | `templates/errors/404.html` | Missing route |
-| 500 | `templates/errors/500.html` | Server error (traceback logged) |
+| 403 | `ErrorPage` | Wrong role / forbidden |
+| 404 | `ErrorPage` | Missing route |
+| 401 | Session cleared | Redirect toward login |
 
-Login branding: Plus Jakarta Sans / DM Mono, split hero, staff vs trainee tabs, `noindex`.
-
-Logout clears the Flask session **first** (avoids hangs on remote Supabase sign-out).
+Login branding: split hero, staff vs trainee tabs. Authenticated `/` redirects to role home; guests see public landing.
 
 ---
 
@@ -628,11 +599,11 @@ Logout clears the Flask session **first** (avoids hangs on remote Supabase sign-
 
 | Document | Content |
 |---|---|
-| `README.md` | Quick start, roles overview, module list |
-| `frontend/README.md` | SPA setup and migration notes |
-| `VISUAL_IMPLEMENTATION_GUIDE.md` | UI/visual implementation notes |
-| `IMPLEMENTATION_STATUS.md` / `IMPLEMENTATION_COMPLETE.md` | Feature completion trackers |
-| `SESSION_COMPLETE.md` | Session work logs |
+| `README.md` | Quick start, roles overview |
+| `CLOUDFLARE.md` | Workers Builds / secrets cheat sheet |
+| `DEPLOYMENT.md` | Full Cloudflare deploy guide |
+| `MIGRATION_INVENTORY.md` | Flask → Workers inventory and blockers |
+| `frontend/README.md` | SPA notes |
 | Migration `*.sql` files | Database change scripts |
 
 This **SYSTEM_DOCUMENTATION.md** is the consolidated reference for architecture, roles, modules, data, security, and deployment.
@@ -649,9 +620,10 @@ This **SYSTEM_DOCUMENTATION.md** is the consolidated reference for architecture,
 | POE | Portfolio of Evidence |
 | CDACC | Curriculum Development, Assessment and Certification Council (TVET) |
 | RLS | Row Level Security (PostgreSQL/Supabase) |
-| JWT | JSON Web Token (staff Supabase Auth session) |
+| JWT | JSON Web Token (Worker session and/or Supabase Auth) |
 | SPA | Single Page Application (`frontend/`) |
 | NYC / CRNM | Not Yet Competent / Course Requirement Not Met |
+| Worker Assets | Cloudflare static SPA hosting on the same Worker as the API |
 
 ---
 
@@ -659,10 +631,10 @@ This **SYSTEM_DOCUMENTATION.md** is the consolidated reference for architecture,
 
 When the system changes, update this file for:
 
-1. New roles or blueprint prefixes  
+1. New roles or portal prefixes  
 2. New migrations (add to §10.3)  
-3. SPA screens reaching parity (update §11.2)  
-4. New required env vars (update §13)  
+3. SPA/API capability changes (update §8 / §11)  
+4. New required secrets/vars (update §13)  
 5. Security policy changes (update §12)  
 
-**Owners:** Development team maintaining the TTTI AMS GitHub repository and Render/Supabase deployments.
+**Owners:** Development team maintaining the TTTI AMS GitHub repository and Cloudflare/Supabase deployments.

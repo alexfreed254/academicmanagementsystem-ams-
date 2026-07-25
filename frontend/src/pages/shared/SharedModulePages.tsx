@@ -315,8 +315,11 @@ export function SummativeEntryPage() {
               style={inputStyle}
             >
               <option value="">Select…</option>
-              <option value="competent">Competent</option>
-              <option value="not_yet_competent">Not yet competent</option>
+              <option value="mastery">Mastery (M) — 80–100%</option>
+              <option value="proficient">Proficient (P) — 65–79%</option>
+              <option value="competent">Competent (C) — 50–64%</option>
+              <option value="not_yet_competent">Not Yet Competent (NYC) — 0–49%</option>
+              <option value="crnm">CRNM — Course Requirement Not Met</option>
             </select>
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 12, fontWeight: 600, color: '#475569' }}>
