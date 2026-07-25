@@ -866,4 +866,31 @@ trainer.post('/trainer/attendance/submit', async (c) => {
   return ok(c, { submitted: true })
 })
 
+trainer.get('/trainer/attendance-history', requireRole('trainer'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('attendance')
+    .select('*, user_profiles(full_name, admission_no), units(name, code), classes(name)')
+    .eq('trainer_id', user.id)
+    .order('attendance_date', { ascending: false })
+    .limit(300)
+  return ok(c, { items: data ?? [] })
+})
+
+trainer.get('/trainer/portfolio', requireRole('trainer'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('trainer_documents')
+    .select('*')
+    .eq('trainer_id', user.id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+trainer.get('/trainer/marks-import', requireRole('trainer'), async (c) => {
+  return ok(c, { items: [] })
+})
+
 export default trainer

@@ -1,11 +1,12 @@
 import { Hono } from 'hono'
 import { getServiceClient, getAnonClient } from '../lib/supabase'
-import { checkWerkzeugHash } from '../lib/passwords'
+import { checkWerkzeugHash, generateWerkzeugHash } from '../lib/passwords'
 import { issueSessionToken, extractBearer, verifySessionToken } from '../lib/session'
 import { ok, err } from '../lib/responses'
 import { writeAuditLog } from '../lib/audit'
 import { loginSchema } from '../schemas'
 import { assertLoginEnv } from '../lib/env'
+import { requireAuth } from '../middleware/auth'
 import { STAFF_ROLES, publicUser, type Env, type AppVariables, type SessionUser } from '../types'
 
 const auth = new Hono<{ Bindings: Env; Variables: AppVariables }>()
@@ -146,6 +147,90 @@ auth.get('/auth/me', async (c) => {
   const user = token ? await verifySessionToken(c.env, token) : null
   if (!user) return err(c, 'Not authenticated.', 401, 'unauthorized')
   return ok(c, { user: publicUser(user) })
+})
+
+const PROFILE_COLS =
+  'id, full_name, email, role, admission_no, staff_no, mobile_number, department_id, is_active, must_change_password, passport_file_path, passport_file_name, departments(name)'
+
+auth.get('/auth/profile', requireAuth, async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data, error } = await db.from('user_profiles').select(PROFILE_COLS).eq('id', user.id).single()
+  if (error || !data) return err(c, 'Profile not found.', 404, 'not_found')
+  return ok(c, { profile: data })
+})
+
+auth.patch('/auth/profile', requireAuth, async (c) => {
+  const user = c.get('user')
+  const body = (await c.req.json().catch(() => null)) as {
+    full_name?: string
+    mobile_number?: string
+  } | null
+  const fullName = String(body?.full_name ?? '').trim()
+  const mobile = String(body?.mobile_number ?? '').trim()
+  if (!fullName) return err(c, 'Full name is required.', 400)
+
+  const db = getServiceClient(c.env)
+  const { error } = await db
+    .from('user_profiles')
+    .update({ full_name: fullName, mobile_number: mobile || null })
+    .eq('id', user.id)
+  if (error) return err(c, 'Failed to update profile.', 500)
+
+  writeAuditLog(c, 'update_profile_details', `user:${user.id}`)
+  const { data } = await db.from('user_profiles').select(PROFILE_COLS).eq('id', user.id).single()
+  return ok(c, { profile: data })
+})
+
+auth.post('/auth/profile/password', requireAuth, async (c) => {
+  const user = c.get('user')
+  const body = (await c.req.json().catch(() => null)) as {
+    current_password?: string
+    new_password?: string
+  } | null
+  const current = String(body?.current_password ?? '')
+  const next = String(body?.new_password ?? '')
+  if (!current) return err(c, 'Current password is required.', 400)
+  if (next.length < 8 || !/\d/.test(next) || !/[!@#$]/.test(next)) {
+    return err(
+      c,
+      'Password must be at least 8 characters with at least one number and one symbol (!@#$).',
+      400,
+    )
+  }
+
+  const db = getServiceClient(c.env)
+  try {
+    if (user.role === 'student') {
+      const { data: row } = await db
+        .from('user_profiles')
+        .select('password_hash')
+        .eq('id', user.id)
+        .maybeSingle()
+      const stored = String((row as { password_hash?: string } | null)?.password_hash || '')
+      if (!(await checkWerkzeugHash(stored, current))) {
+        return err(c, 'Current password is incorrect.', 400)
+      }
+      const hash = await generateWerkzeugHash(next)
+      await db
+        .from('user_profiles')
+        .update({ password_hash: hash, must_change_password: false })
+        .eq('id', user.id)
+    } else {
+      const email = user.email || ''
+      if (!email) return err(c, 'Staff account has no email.', 400)
+      const anon = getAnonClient(c.env)
+      const { error: signErr } = await anon.auth.signInWithPassword({ email, password: current })
+      if (signErr) return err(c, 'Current password is incorrect.', 400)
+      const { error: updErr } = await db.auth.admin.updateUserById(user.id, { password: next })
+      if (updErr) return err(c, 'Error changing password.', 500)
+      await db.from('user_profiles').update({ must_change_password: false }).eq('id', user.id)
+    }
+    writeAuditLog(c, 'change_password', `user:${user.id}`)
+    return ok(c, { changed: true })
+  } catch {
+    return err(c, 'Error changing password.', 500)
+  }
 })
 
 export default auth

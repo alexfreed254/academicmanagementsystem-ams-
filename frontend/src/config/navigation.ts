@@ -248,24 +248,24 @@ const superAdminNav: NavSection[] = [
   {
     title: 'Summative Assessment',
     items: [
-      { label: 'Overview', to: '/summative/', icon: 'th-large', external: true },
-      { label: 'Competence Entry', to: '/summative/entry', icon: 'edit', external: true },
-      { label: 'Unit Performance', to: '/summative/analysis', icon: 'chart-bar', external: true },
-      { label: 'Reports & Downloads', to: '/summative/reports', icon: 'download', external: true },
-      { label: 'Graduation List', to: '/summative/graduation-list', icon: 'user-graduate', external: true },
+      { label: 'Overview', to: '/summative/', icon: 'th-large' },
+      { label: 'Competence Entry', to: '/summative/entry', icon: 'edit' },
+      { label: 'Unit Performance', to: '/summative/analysis', icon: 'chart-bar' },
+      { label: 'Reports & Downloads', to: '/summative/reports', icon: 'download' },
+      { label: 'Graduation List', to: '/summative/graduation-list', icon: 'user-graduate' },
     ],
   },
   {
     title: 'Academic Trips',
     items: [
-      { label: 'Trip Reports', to: '/academic-trips', icon: 'bus', external: true },
-      { label: 'Upload Trip Report', to: '/academic-trips/upload', icon: 'plus-circle', external: true },
+      { label: 'Trip Reports', to: '/academic-trips', icon: 'bus' },
+      { label: 'Upload Trip Report', to: '/academic-trips/upload', icon: 'plus-circle' },
     ],
   },
   {
     title: 'Clearance Management',
     items: [
-      { label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check', external: true },
+      { label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check' },
       { label: 'All Clearance Requests', to: '/super-admin/clearances', icon: 'list-alt' },
       { label: 'Institute Library', to: '/super-admin/service-clearance?cat=svc_library', icon: 'book' },
       { label: 'Games Department', to: '/super-admin/service-clearance?cat=svc_games', icon: 'futbol' },
@@ -295,7 +295,7 @@ const superAdminNav: NavSection[] = [
       { label: 'Import Data', to: '/super-admin/import', icon: 'file-excel' },
     ],
   },
-  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const deptAdminNav: NavSection[] = [
@@ -339,14 +339,14 @@ const deptAdminNav: NavSection[] = [
   {
     title: 'Summative Assessment',
     items: [
-      { label: 'Overview', to: '/summative/', icon: 'th-large', external: true },
-      { label: 'Competence Entry', to: '/summative/entry', icon: 'edit', external: true },
-      { label: 'Unit Performance', to: '/summative/analysis', icon: 'chart-bar', external: true },
-      { label: 'Reports & Downloads', to: '/summative/reports', icon: 'download', external: true },
-      { label: 'Graduation List', to: '/summative/graduation-list', icon: 'user-graduate', external: true },
+      { label: 'Overview', to: '/summative/', icon: 'th-large' },
+      { label: 'Competence Entry', to: '/summative/entry', icon: 'edit' },
+      { label: 'Unit Performance', to: '/summative/analysis', icon: 'chart-bar' },
+      { label: 'Reports & Downloads', to: '/summative/reports', icon: 'download' },
+      { label: 'Graduation List', to: '/summative/graduation-list', icon: 'user-graduate' },
     ],
   },
-  { title: 'Academic Trips', items: [{ label: 'Trip Reports', to: '/academic-trips', icon: 'bus', external: true }] },
+  { title: 'Academic Trips', items: [{ label: 'Trip Reports', to: '/academic-trips', icon: 'bus' }] },
   {
     title: 'Industrial Attachment',
     items: [
@@ -362,12 +362,12 @@ const deptAdminNav: NavSection[] = [
   {
     title: 'Administration',
     items: [
-      { label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check', external: true },
+      { label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check' },
       { label: 'Send Notice / Memo', to: '/dept-admin/notices', icon: 'bullhorn' },
       { label: 'Import Data', to: '/dept-admin/import', icon: 'file-excel' },
     ],
   },
-  { title: 'Account', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Account', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const trainerNav: NavSection[] = [
@@ -376,7 +376,7 @@ const trainerNav: NavSection[] = [
     title: 'Attendance',
     items: [
       { label: 'Mark Attendance', to: '/trainer/attendance', icon: 'clipboard-list' },
-      { label: 'Biometric Attendance', to: '/biometric/', icon: 'fingerprint', external: true },
+      { label: 'Biometric Attendance', to: '/biometric/', icon: 'fingerprint' },
       { label: 'View & Download Attendance', to: '/trainer/attendance-history', icon: 'download' },
     ],
   },
@@ -386,26 +386,26 @@ const trainerNav: NavSection[] = [
       { label: 'Trainee POE Review', to: '/trainer/assessments', icon: 'tasks' },
       { label: 'Marks Entry', to: '/trainer/marks-entry', icon: 'edit' },
       { label: 'Import Marks', to: '/trainer/marks-import', icon: 'file-excel' },
-      { label: 'Summative Assessments', to: '/summative/', icon: 'award', external: true },
+      { label: 'Summative Assessments', to: '/summative/', icon: 'award' },
       { label: 'My Portfolio (POE)', to: '/trainer/portfolio', icon: 'folder-open' },
     ],
   },
   {
     title: 'Academic Trips',
     items: [
-      { label: 'Trip Reports', to: '/academic-trips', icon: 'bus', external: true },
-      { label: 'Upload Trip Report', to: '/academic-trips/upload', icon: 'plus-circle', external: true },
+      { label: 'Trip Reports', to: '/academic-trips', icon: 'bus' },
+      { label: 'Upload Trip Report', to: '/academic-trips/upload', icon: 'plus-circle' },
     ],
   },
   {
     title: 'Administration',
-    items: [{ label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check', external: true }],
+    items: [{ label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check' }],
   },
   {
     title: 'Account',
     items: [
-      { label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true },
-      { label: 'Notifications', to: '/notifications', icon: 'bell', external: true },
+      { label: 'My Profile', to: '/auth/profile', icon: 'user-circle' },
+      { label: 'Notifications', to: '/notifications', icon: 'bell' },
     ],
   },
 ]
@@ -443,15 +443,15 @@ const studentNav: NavSection[] = [
   {
     title: 'Services',
     items: [
-      { label: 'Course Clearance', to: '/clearance/', icon: 'clipboard-check', external: true },
+      { label: 'Course Clearance', to: '/clearance/', icon: 'clipboard-check' },
       { label: 'Employment Status', to: '/student/employment-status', icon: 'user-tie' },
     ],
   },
   {
     title: 'Account',
     items: [
-      { label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true },
-      { label: 'Notifications', to: '/notifications', icon: 'bell', external: true },
+      { label: 'My Profile', to: '/auth/profile', icon: 'user-circle' },
+      { label: 'Notifications', to: '/notifications', icon: 'bell' },
     ],
   },
 ]
@@ -465,7 +465,7 @@ const examinationOfficerNav: NavSection[] = [
       { label: 'Marks Report', to: '/examination-officer/marks', icon: 'chart-line' },
     ],
   },
-  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const industryMentorNav: NavSection[] = [
@@ -485,7 +485,7 @@ const industryMentorNav: NavSection[] = [
       { label: 'Location Tracking', to: '/industry-mentor/location', icon: 'map-marker-alt' },
     ],
   },
-  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const internalVerifierNav: NavSection[] = [
@@ -498,7 +498,7 @@ const internalVerifierNav: NavSection[] = [
     ],
   },
   { title: 'Reports', items: [{ label: 'CDACC Reports', to: '/internal-verifier/reports', icon: 'file-alt' }] },
-  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const liaisonOfficerNav: NavSection[] = [
@@ -523,13 +523,13 @@ const liaisonOfficerNav: NavSection[] = [
   },
   {
     title: 'Clearance',
-    items: [{ label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check', external: true }],
+    items: [{ label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check' }],
   },
   {
     title: 'Profile',
     items: [
-      { label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true },
-      { label: 'Notifications', to: '/notifications', icon: 'bell', external: true },
+      { label: 'My Profile', to: '/auth/profile', icon: 'user-circle' },
+      { label: 'Notifications', to: '/notifications', icon: 'bell' },
     ],
   },
 ]
@@ -559,8 +559,8 @@ const cdaccVerifierNav: NavSection[] = [
   {
     title: 'Account',
     items: [
-      { label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true },
-      { label: 'Notifications', to: '/notifications', icon: 'bell', external: true },
+      { label: 'My Profile', to: '/auth/profile', icon: 'user-circle' },
+      { label: 'Notifications', to: '/notifications', icon: 'bell' },
     ],
   },
 ]
@@ -569,9 +569,9 @@ const workshopTechnicianNav: NavSection[] = [
   { items: [{ label: 'Dashboard', to: '/workshop-technician/dashboard', icon: 'tachometer-alt' }] },
   { items: [{ label: 'Workshop Inventory', to: '/workshop-technician/inventory', icon: 'boxes' }] },
   {
-    items: [{ label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check', external: true }],
+    items: [{ label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check' }],
   },
-  { items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const registrarNav: NavSection[] = [
@@ -584,7 +584,7 @@ const registrarNav: NavSection[] = [
     title: 'Clearance',
     items: [{ label: 'Clearance Requests', to: '/admin-oversight/registrar/clearances', icon: 'clipboard-check' }],
   },
-  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const deputyPrincipalNav: NavSection[] = [
@@ -602,7 +602,7 @@ const deputyPrincipalNav: NavSection[] = [
       { label: 'Clearance Oversight', to: '/admin-oversight/deputy-principal/clearances', icon: 'clipboard-list' },
     ],
   },
-  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const qualityAssuranceNav: NavSection[] = [
@@ -620,7 +620,7 @@ const qualityAssuranceNav: NavSection[] = [
       { label: 'Assessment Approvals', to: '/admin-oversight/quality-assurance/approvals', icon: 'check-circle' },
     ],
   },
-  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Profile', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 function serviceDeptNav(label: string): NavSection[] {
@@ -629,10 +629,10 @@ function serviceDeptNav(label: string): NavSection[] {
       title: label,
       items: [
         { label: 'Dashboard', to: '/service-dept/dashboard', icon: 'tachometer-alt' },
-        { label: 'Pending Clearances', to: '/service-dept/pending', icon: 'hourglass-half' },
+        { label: 'Pending Clearances', to: '/clearance/service-dept', icon: 'hourglass-half' },
       ],
     },
-    { title: 'Account', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+    { title: 'Account', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
   ]
 }
 
@@ -641,7 +641,7 @@ const clearanceApproverNav: NavSection[] = [
     title: 'Clearance',
     items: [{ label: 'Clearance Approvals', to: '/clearance/approver', icon: 'clipboard-check' }],
   },
-  { title: 'Account', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle', external: true }] },
+  { title: 'Account', items: [{ label: 'My Profile', to: '/auth/profile', icon: 'user-circle' }] },
 ]
 
 const portalNav: Partial<Record<UserRole, NavSection[]>> = {

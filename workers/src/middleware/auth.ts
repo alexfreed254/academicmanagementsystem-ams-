@@ -9,6 +9,8 @@ type AppEnv = { Bindings: Env; Variables: AppVariables }
 const PASSWORD_CHANGE_ALLOWED = new Set([
   '/api/v1/auth/logout',
   '/api/v1/auth/me',
+  '/api/v1/auth/profile',
+  '/api/v1/auth/profile/password',
   '/api/v1/csrf-token',
 ])
 

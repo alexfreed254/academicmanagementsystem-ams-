@@ -610,4 +610,519 @@ roles.get(
   },
 )
 
+/* ── Examination Officer: bookings + marks ───────────────────────────────── */
+
+function flattenExamBooking(booking: Row): Row {
+  const student = (booking.student as Row) || {}
+  const enrollments = (student.enrollments as Row[]) || []
+  const cls = (enrollments[0]?.classes as Row) || {}
+  student.classes = { name: cls.name ?? null, departments: cls.departments ?? {} }
+  booking.user_profiles = student
+  booking.approved_by_user = booking.approver ?? {}
+  return booking
+}
+
+roles.get('/examination-officer/exam-bookings', requireRole('examination_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const admissionNo = (c.req.query('admission_no') ?? '').trim()
+  const classId = (c.req.query('class_id') ?? '').trim()
+  const traineeName = (c.req.query('trainee_name') ?? '').trim()
+  const year = (c.req.query('year') ?? '').trim()
+  const examSeries = (c.req.query('exam_series') ?? '').trim()
+
+  const selectStr = classId
+    ? '*, units(name, code), student:user_profiles!exam_bookings_student_id_fkey!inner(full_name, admission_no, enrollments!inner(class_id, classes(name, departments(name)))), approver:user_profiles!exam_bookings_approved_by_fkey(full_name)'
+    : '*, units(name, code), student:user_profiles!exam_bookings_student_id_fkey!inner(full_name, admission_no, enrollments(class_id, classes(name, departments(name)))), approver:user_profiles!exam_bookings_approved_by_fkey(full_name)'
+
+  let query = db.from('exam_bookings').select(selectStr).eq('status', 'approved')
+  if (year) {
+    query = query.gte('exam_date', `${year}-01-01`).lte('exam_date', `${year}-12-31`)
+  }
+  const { data } = await query.order('exam_date', { ascending: false })
+  let bookings = ((data ?? []) as Row[]).map(flattenExamBooking)
+
+  if (admissionNo) {
+    bookings = bookings.filter((b) =>
+      String(((b.user_profiles as Row)?.admission_no as string) || '')
+        .toLowerCase()
+        .includes(admissionNo.toLowerCase()),
+    )
+  }
+  if (traineeName) {
+    bookings = bookings.filter((b) =>
+      String(((b.user_profiles as Row)?.full_name as string) || '')
+        .toLowerCase()
+        .includes(traineeName.toLowerCase()),
+    )
+  }
+  if (classId) {
+    bookings = bookings.filter((b) => {
+      const enrollments =
+        (((b.user_profiles as Row)?.enrollments as Row[]) ||
+          ((b.student as Row)?.enrollments as Row[]) ||
+          []) as Row[]
+      return enrollments.some((e) => e.class_id === classId)
+    })
+  }
+  if (examSeries) {
+    const es = examSeries.toLowerCase()
+    bookings = bookings.filter(
+      (b) =>
+        String(b.exam_session || '')
+          .toLowerCase()
+          .includes(es) ||
+        String(b.exam_series_no || '')
+          .toLowerCase()
+          .includes(es) ||
+        String(b.exam_term || '')
+          .toLowerCase()
+          .includes(es) ||
+        String(b.serial_number || '')
+          .toLowerCase()
+          .includes(es),
+    )
+  }
+
+  const { data: classes } = await db.from('classes').select('*').order('name')
+  return ok(c, {
+    bookings,
+    classes: classes ?? [],
+    filters: {
+      admission_no: admissionNo,
+      class_id: classId,
+      trainee_name: traineeName,
+      year,
+      exam_series: examSeries,
+    },
+  })
+})
+
+roles.post(
+  '/examination-officer/exam-bookings/:id/confirm',
+  requireRole('examination_officer'),
+  async (c) => {
+    const db = getServiceClient(c.env)
+    const id = c.req.param('id')
+    const { data: booking } = await db.from('exam_bookings').select('*').eq('id', id).maybeSingle()
+    if (!booking) return err(c, 'Booking not found.', 404)
+    if ((booking as Row).status !== 'approved') {
+      return err(c, 'Only approved bookings can be confirmed.', 400)
+    }
+    await db.from('exam_bookings').update({ status: 'completed' }).eq('id', id)
+    const studentId = (booking as Row).student_id as string
+    if (studentId) {
+      await db.from('notifications').insert({
+        user_id: studentId,
+        title: 'Exam Booking Confirmed',
+        message: `Your exam booking for ${(booking as Row).exam_date || 'the scheduled date'} has been confirmed by the Examination Officer.`,
+        notification_type: 'success',
+        action_url: '/student/exam-bookings',
+        is_read: false,
+      })
+    }
+    return ok(c, { confirmed: true })
+  },
+)
+
+roles.get('/examination-officer/marks', requireRole('examination_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const year = c.req.query('year') || String(new Date().getFullYear())
+  const term = (c.req.query('term') ?? '').trim()
+  const classId = (c.req.query('class_id') ?? '').trim()
+  const unitId = (c.req.query('unit_id') ?? '').trim()
+
+  let query = db
+    .from('marks')
+    .select(
+      '*, units(name, code), user_profiles!marks_student_id_fkey(full_name, admission_no), classes(name, departments(name))',
+    )
+    .eq('year', parseInt(year, 10) || new Date().getFullYear())
+  if (term) query = query.eq('term', term)
+  if (classId) query = query.eq('class_id', classId)
+  if (unitId) query = query.eq('unit_id', unitId)
+
+  const [{ data: marks }, { data: classes }, { data: units }] = await Promise.all([
+    query.order('created_at', { ascending: false }),
+    db.from('classes').select('*').order('name'),
+    db.from('units').select('*').order('code'),
+  ])
+
+  return ok(c, {
+    marks: marks ?? [],
+    classes: classes ?? [],
+    units: units ?? [],
+    year,
+    term,
+    class_id: classId,
+    unit_id: unitId,
+  })
+})
+
+/* ── Workshop inventory ──────────────────────────────────────────────────── */
+
+roles.get('/workshop-technician/inventory', requireRole('workshop_technician'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const deptId = user.department_id
+  if (!deptId) return ok(c, { items: [], categories: [], conditions: [] })
+  const { data: items } = await db
+    .from('workshop_inventory')
+    .select('*')
+    .eq('department_id', deptId)
+    .order('item_name')
+  return ok(c, {
+    items: items ?? [],
+    categories: [
+      'Power Tools',
+      'Hand Tools',
+      'Safety Equipment',
+      'Measuring Instruments',
+      'Electrical Equipment',
+      'Machinery',
+      'Computer / ICT Equipment',
+      'Furniture / Fixtures',
+      'Consumables',
+      'Other',
+    ],
+    conditions: ['good', 'fair', 'poor', 'damaged'],
+  })
+})
+
+/* ── Industry mentor pages ───────────────────────────────────────────────── */
+
+roles.get('/industry-mentor/trainees', requireRole('industry_mentor'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: mentor } = await db.from('mentors').select('*').eq('user_id', user.id).maybeSingle()
+  if (!mentor) return err(c, 'Mentor profile not found.', 404, 'no_mentor')
+  const companyId = (mentor as Row).company_id as string
+  const { data } = await db
+    .from('industrial_attachments')
+    .select('*, user_profiles(full_name, admission_no), units(name, code), companies(name)')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false })
+  return ok(c, { trainees: data ?? [], mentor })
+})
+
+roles.get('/industry-mentor/logbook', requireRole('industry_mentor'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: mentor } = await db.from('mentors').select('*').eq('user_id', user.id).maybeSingle()
+  if (!mentor) return err(c, 'Mentor profile not found.', 404, 'no_mentor')
+  const companyId = (mentor as Row).company_id as string
+  const { data: attachments } = await db
+    .from('industrial_attachments')
+    .select('id')
+    .eq('company_id', companyId)
+  const ids = ((attachments ?? []) as Row[]).map((a) => a.id as string)
+  if (!ids.length) return ok(c, { entries: [] })
+  const { data } = await db
+    .from('digital_logbook')
+    .select('*, user_profiles(full_name, admission_no)')
+    .in('attachment_id', ids)
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { entries: data ?? [] })
+})
+
+roles.get('/industry-mentor/competency', requireRole('industry_mentor'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: mentor } = await db.from('mentors').select('*').eq('user_id', user.id).maybeSingle()
+  if (!mentor) return err(c, 'Mentor profile not found.', 404, 'no_mentor')
+  const companyId = (mentor as Row).company_id as string
+  const { data: attachments } = await db
+    .from('industrial_attachments')
+    .select('id')
+    .eq('company_id', companyId)
+  const ids = ((attachments ?? []) as Row[]).map((a) => a.id as string)
+  if (!ids.length) return ok(c, { competencies: [] })
+  const { data } = await db
+    .from('competency_tracking')
+    .select('*, user_profiles(full_name, admission_no), units(name, code)')
+    .in('attachment_id', ids)
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { competencies: data ?? [] })
+})
+
+roles.get('/industry-mentor/weekly-attendance', requireRole('industry_mentor'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: mentor } = await db.from('mentors').select('*').eq('user_id', user.id).maybeSingle()
+  if (!mentor) return err(c, 'Mentor profile not found.', 404, 'no_mentor')
+  const companyId = (mentor as Row).company_id as string
+  const { data: attachments } = await db
+    .from('industrial_attachments')
+    .select('id, user_profiles(full_name, admission_no)')
+    .eq('company_id', companyId)
+  const ids = ((attachments ?? []) as Row[]).map((a) => a.id as string)
+  if (!ids.length) return ok(c, { records: [], attachments: [] })
+  const { data } = await db
+    .from('attachment_weekly_attendance')
+    .select('*')
+    .in('attachment_id', ids)
+    .order('week_ending', { ascending: false })
+    .limit(200)
+  return ok(c, { records: data ?? [], attachments: attachments ?? [] })
+})
+
+roles.get('/industry-mentor/location', requireRole('industry_mentor'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: mentor } = await db.from('mentors').select('*').eq('user_id', user.id).maybeSingle()
+  if (!mentor) return err(c, 'Mentor profile not found.', 404, 'no_mentor')
+  const companyId = (mentor as Row).company_id as string
+  const { data: attachments } = await db
+    .from('industrial_attachments')
+    .select('id, user_profiles(full_name, admission_no), companies(name, address)')
+    .eq('company_id', companyId)
+  const ids = ((attachments ?? []) as Row[]).map((a) => a.id as string)
+  if (!ids.length) return ok(c, { placements: attachments ?? [], logs: [] })
+  const { data: logs } = await db
+    .from('location_logs')
+    .select('*')
+    .in('attachment_id', ids)
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { placements: attachments ?? [], logs: logs ?? [] })
+})
+
+/* ── Internal verifier pages ─────────────────────────────────────────────── */
+
+roles.get('/internal-verifier/competency', requireRole('internal_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('competency_tracking')
+    .select('*, user_profiles(full_name, admission_no), units(name, code)')
+    .eq('verification_status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { competencies: data ?? [] })
+})
+
+roles.get('/internal-verifier/attachments', requireRole('internal_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('industrial_attachments')
+    .select('*, user_profiles(full_name, admission_no), companies(name), units(name, code)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { attachments: data ?? [] })
+})
+
+roles.get('/internal-verifier/reports', requireRole('internal_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const [pending, verified, rejected] = await Promise.all([
+    countTable(db, 'competency_tracking', { verification_status: 'pending' }),
+    countTable(db, 'competency_tracking', { verification_status: 'verified' }),
+    countTable(db, 'competency_tracking', { verification_status: 'rejected' }),
+  ])
+  return ok(c, { stats: { pending, verified, rejected } })
+})
+
+/* ── Liaison pages ───────────────────────────────────────────────────────── */
+
+roles.get('/liaison-officer/periods', requireRole('liaison_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db.from('attachment_periods').select('*').order('start_date', { ascending: false })
+  return ok(c, { periods: data ?? [] })
+})
+
+roles.get('/liaison-officer/attachments', requireRole('liaison_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const status = (c.req.query('status') ?? '').trim()
+  let query = db
+    .from('industrial_attachments')
+    .select('*, user_profiles(full_name, admission_no), companies(name), units(name, code)')
+    .order('created_at', { ascending: false })
+    .limit(300)
+  if (status) query = query.eq('status', status)
+  const { data } = await query
+  return ok(c, { attachments: data ?? [], status })
+})
+
+roles.get('/liaison-officer/logbooks', requireRole('liaison_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('digital_logbook')
+    .select('*, user_profiles(full_name, admission_no)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { entries: data ?? [] })
+})
+
+roles.get('/liaison-officer/attachment-marks', requireRole('liaison_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('industrial_attachments')
+    .select('*, user_profiles(full_name, admission_no), companies(name), attachment_grades(*)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { marks: data ?? [] })
+})
+
+roles.get('/liaison-officer/mentoring-tools', requireRole('liaison_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('mentoring_tool_uploads')
+    .select('*, companies(name)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { tools: data ?? [] })
+})
+
+roles.get('/liaison-officer/companies', requireRole('liaison_officer'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db.from('companies').select('*').order('name')
+  return ok(c, { companies: data ?? [] })
+})
+
+/* ── CDACC pages ─────────────────────────────────────────────────────────── */
+
+roles.get('/cdacc-verifier/trainer-documents', requireRole('cdacc_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('trainer_documents')
+    .select('*, user_profiles(full_name, email, staff_no)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { documents: data ?? [] })
+})
+
+roles.get('/cdacc-verifier/marks', requireRole('cdacc_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const year = c.req.query('year') || String(new Date().getFullYear())
+  const { data } = await db
+    .from('marks')
+    .select(
+      '*, units(name, code), user_profiles!marks_student_id_fkey(full_name, admission_no), classes(name)',
+    )
+    .eq('year', parseInt(year, 10) || new Date().getFullYear())
+    .order('created_at', { ascending: false })
+    .limit(500)
+  return ok(c, { marks: data ?? [], year })
+})
+
+roles.get('/cdacc-verifier/trainees', requireRole('cdacc_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('user_profiles')
+    .select('id, full_name, admission_no, email, department_id, departments(name)')
+    .eq('role', 'student')
+    .eq('is_active', true)
+    .order('full_name')
+    .limit(500)
+  return ok(c, { trainees: data ?? [] })
+})
+
+roles.get('/cdacc-verifier/trainee-poe', requireRole('cdacc_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('assessments')
+    .select('*, user_profiles(full_name, admission_no), units(name, code)')
+    .order('uploaded_at', { ascending: false })
+    .limit(200)
+  return ok(c, { assessments: data ?? [] })
+})
+
+roles.get('/cdacc-verifier/attachment-marks', requireRole('cdacc_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('attachment_grades')
+    .select('*, industrial_attachments(user_profiles(full_name, admission_no), companies(name))')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { marks: data ?? [] })
+})
+
+roles.get('/cdacc-verifier/mentoring-tools', requireRole('cdacc_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('mentoring_tool_uploads')
+    .select('*, companies(name)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { tools: data ?? [] })
+})
+
+roles.get('/cdacc-verifier/digital-logbook', requireRole('cdacc_verifier'), async (c) => {
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('digital_logbook')
+    .select('*, user_profiles(full_name, admission_no)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return ok(c, { entries: data ?? [] })
+})
+
+/* ── Admin oversight sub-pages ───────────────────────────────────────────── */
+
+roles.get('/admin-oversight/registrar/clearances', requireRole('registrar'), async (c) => {
+  const db = getServiceClient(c.env)
+  const payload = await oversightPayload(db, '', { includeAdmissions: true })
+  return ok(c, {
+    pending_clearances: payload.pending_clearances,
+    completed_clearances: payload.completed_clearances,
+  })
+})
+
+roles.get('/admin-oversight/registrar/admissions', requireRole('registrar'), async (c) => {
+  const db = getServiceClient(c.env)
+  const payload = await oversightPayload(db, '', { includeAdmissions: true })
+  return ok(c, { pending_admissions: payload.pending_admissions })
+})
+
+roles.get(
+  '/admin-oversight/deputy-principal/academic',
+  requireRole('deputy_principal'),
+  async (c) => {
+    const db = getServiceClient(c.env)
+    const payload = await oversightPayload(db, '', { includeTrainers: true, includeCerts: true })
+    return ok(c, payload)
+  },
+)
+
+roles.get(
+  '/admin-oversight/deputy-principal/clearances',
+  requireRole('deputy_principal'),
+  async (c) => {
+    const db = getServiceClient(c.env)
+    const payload = await oversightPayload(db, '', {})
+    return ok(c, {
+      pending_clearances: payload.pending_clearances,
+      completed_clearances: payload.completed_clearances,
+    })
+  },
+)
+
+roles.get(
+  '/admin-oversight/quality-assurance/reports',
+  requireRole('quality_assurance_officer'),
+  async (c) => {
+    const db = getServiceClient(c.env)
+    const payload = await oversightPayload(db, '', {
+      includeTrainers: true,
+      includeCerts: true,
+      includeAssessments: true,
+    })
+    return ok(c, payload)
+  },
+)
+
+roles.get(
+  '/admin-oversight/quality-assurance/approvals',
+  requireRole('quality_assurance_officer'),
+  async (c) => {
+    const db = getServiceClient(c.env)
+    const { data } = await db
+      .from('assessments')
+      .select('*, user_profiles(full_name, admission_no), units(name, code)')
+      .eq('status', 'pending')
+      .order('uploaded_at', { ascending: false })
+      .limit(100)
+    return ok(c, { assessments: data ?? [] })
+  },
+)
+
 export default roles

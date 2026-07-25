@@ -4,8 +4,16 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PageSkeleton } from '@/components/ui/States'
 import { RequireAuth, RequireRole } from '@/routes/guards'
 import { RoleHomeRedirect } from '@/routes/RoleHomeRedirect'
+import * as RoleMenus from '@/pages/shared/RoleMenuPages'
+import * as AdminMenus from '@/pages/shared/AdminMenuPages'
+import * as SharedMods from '@/pages/shared/SharedModulePages'
+import * as STMenus from '@/pages/shared/StudentTrainerMenuPages'
 
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'))
+const ProfilePage = lazy(() => import('@/pages/shared/ProfilePage'))
+const NotificationsPage = lazy(() => import('@/pages/shared/NotificationsPage'))
+const FeaturePlaceholder = lazy(() => import('@/pages/shared/FeaturePlaceholder'))
+const InternalVerifierReportsPage = lazy(() => import('@/pages/shared/InternalVerifierReportsPage'))
 
 const TrainerDashboardPage = lazy(() => import('@/pages/trainer/DashboardPage'))
 const MarksEntryPage = lazy(() => import('@/pages/trainer/MarksEntryPage'))
@@ -34,13 +42,10 @@ const QualityAssuranceDashboardPage = lazy(
   () => import('@/pages/admin_oversight/QualityAssuranceDashboardPage'),
 )
 
-const FeaturePlaceholder = lazy(() => import('@/pages/shared/FeaturePlaceholder'))
-
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
 }
 
-/** Any nav destination inside a portal that has no React page yet. */
 function Pending() {
   return (
     <Lazy>
@@ -49,293 +54,239 @@ function Pending() {
   )
 }
 
+function L({ children }: { children: ReactNode }) {
+  return <Lazy>{children}</Lazy>
+}
+
 export function AppRouter() {
   return (
     <BrowserRouter>
       <ErrorBoundary>
         <Routes>
-          <Route
-            path="/login"
-            element={
-              <Lazy>
-                <LoginPage />
-              </Lazy>
-            }
-          />
+          <Route path="/login" element={<L><LoginPage /></L>} />
 
           <Route element={<RequireAuth />}>
-            {/* ── Trainer ─────────────────────────────────────────────── */}
+            {/* Shared destinations used by every sidebar */}
+            <Route path="/auth/profile" element={<L><ProfilePage /></L>} />
+            <Route path="/notifications" element={<L><NotificationsPage /></L>} />
+            <Route path="/clearance/approver" element={<L><SharedMods.ClearanceApproverPage /></L>} />
+            <Route path="/clearance/service-dept" element={<L><SharedMods.ServiceClearancePage /></L>} />
+            <Route path="/clearance/" element={<L><SharedMods.ClearanceStudentPage /></L>} />
+            <Route path="/clearance" element={<Navigate to="/clearance/" replace />} />
+            <Route path="/summative/*" element={<L><SharedMods.SummativeHubPage /></L>} />
+            <Route path="/summative" element={<Navigate to="/summative/" replace />} />
+            <Route path="/academic-trips/*" element={<L><SharedMods.AcademicTripsPage /></L>} />
+            <Route path="/academic-trips" element={<L><SharedMods.AcademicTripsPage /></L>} />
+            <Route path="/biometric/*" element={<L><SharedMods.BiometricPage /></L>} />
+            <Route path="/biometric" element={<Navigate to="/biometric/" replace />} />
+
+            {/* Trainer */}
             <Route element={<RequireRole roles={['trainer']} />}>
-              <Route
-                path="/trainer/dashboard"
-                element={
-                  <Lazy>
-                    <TrainerDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/trainer/attendance"
-                element={
-                  <Lazy>
-                    <AttendancePage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/trainer/assessments"
-                element={
-                  <Lazy>
-                    <AssessmentsPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/trainer/marks-entry"
-                element={
-                  <Lazy>
-                    <MarksEntryPage />
-                  </Lazy>
-                }
-              />
+              <Route path="/trainer/dashboard" element={<L><TrainerDashboardPage /></L>} />
+              <Route path="/trainer/attendance" element={<L><AttendancePage /></L>} />
+              <Route path="/trainer/attendance-history" element={<L><STMenus.TrainerAttendanceHistoryPage /></L>} />
+              <Route path="/trainer/assessments" element={<L><AssessmentsPage /></L>} />
+              <Route path="/trainer/marks-entry" element={<L><MarksEntryPage /></L>} />
+              <Route path="/trainer/marks-import" element={<L><STMenus.TrainerMarksImportPage /></L>} />
+              <Route path="/trainer/portfolio" element={<L><STMenus.TrainerPortfolioPage /></L>} />
               <Route path="/trainer" element={<Navigate to="/trainer/dashboard" replace />} />
               <Route path="/trainer/*" element={<Pending />} />
             </Route>
 
-            {/* ── Student ─────────────────────────────────────────────── */}
+            {/* Student */}
             <Route element={<RequireRole roles={['student']} />}>
-              <Route
-                path="/student/dashboard"
-                element={
-                  <Lazy>
-                    <StudentDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/student/units"
-                element={
-                  <Lazy>
-                    <StudentUnitsPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/student/attendance"
-                element={
-                  <Lazy>
-                    <StudentAttendancePage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/student/marks"
-                element={
-                  <Lazy>
-                    <StudentMarksPage />
-                  </Lazy>
-                }
-              />
+              <Route path="/student/dashboard" element={<L><StudentDashboardPage /></L>} />
+              <Route path="/student/units" element={<L><StudentUnitsPage /></L>} />
+              <Route path="/student/attendance" element={<L><StudentAttendancePage /></L>} />
+              <Route path="/student/marks" element={<L><StudentMarksPage /></L>} />
+              <Route path="/student/summative" element={<L><STMenus.StudentSummativePage /></L>} />
+              <Route path="/student/portfolio" element={<L><STMenus.StudentPortfolioPage /></L>} />
+              <Route path="/student/assessments" element={<L><STMenus.StudentAssessmentsPage /></L>} />
+              <Route path="/student/documents" element={<L><STMenus.StudentDocumentsPage /></L>} />
+              <Route path="/student/exam-booking-form" element={<L><STMenus.StudentExamBookingFormPage /></L>} />
+              <Route path="/student/exam-bookings" element={<L><STMenus.StudentExamBookingsPage /></L>} />
+              <Route path="/student/industrial-attachment" element={<L><STMenus.StudentIndustrialAttachmentPage /></L>} />
+              <Route path="/student/logbook" element={<L><STMenus.StudentLogbookPage /></L>} />
+              <Route path="/student/attachment-marks" element={<L><STMenus.StudentAttachmentMarksPage /></L>} />
+              <Route path="/student/mentoring-tool" element={<L><STMenus.StudentMentoringToolPage /></L>} />
+              <Route path="/student/employment-status" element={<L><STMenus.StudentEmploymentStatusPage /></L>} />
               <Route path="/student" element={<Navigate to="/student/dashboard" replace />} />
               <Route path="/student/*" element={<Pending />} />
             </Route>
 
-            {/* ── Super Admin ─────────────────────────────────────────── */}
+            {/* Super Admin */}
             <Route element={<RequireRole roles={['super_admin']} />}>
-              <Route
-                path="/super-admin/dashboard"
-                element={
-                  <Lazy>
-                    <SuperAdminDashboardPage />
-                  </Lazy>
-                }
-              />
+              <Route path="/super-admin/dashboard" element={<L><SuperAdminDashboardPage /></L>} />
+              <Route path="/super-admin/users" element={<L><AdminMenus.SuperAdminUsersPage /></L>} />
+              <Route path="/super-admin/credentials" element={<L><AdminMenus.SuperAdminCredentialsPage /></L>} />
+              <Route path="/super-admin/departments" element={<L><AdminMenus.SuperAdminDepartmentsPage /></L>} />
+              <Route path="/super-admin/courses" element={<L><AdminMenus.SuperAdminCoursesPage /></L>} />
+              <Route path="/super-admin/classes" element={<L><AdminMenus.SuperAdminClassesPage /></L>} />
+              <Route path="/super-admin/units" element={<L><AdminMenus.SuperAdminUnitsPage /></L>} />
+              <Route path="/super-admin/trainees-documents" element={<L><AdminMenus.SuperAdminTraineesDocsPage /></L>} />
+              <Route path="/super-admin/attendance" element={<L><AdminMenus.SuperAdminAttendancePage /></L>} />
+              <Route path="/super-admin/class-list" element={<L><AdminMenus.SuperAdminClassListPage /></L>} />
+              <Route path="/super-admin/trainee-search" element={<L><AdminMenus.SuperAdminTraineeSearchPage /></L>} />
+              <Route path="/super-admin/assessment-sheet" element={<L><AdminMenus.SuperAdminAssessmentSheetPage /></L>} />
+              <Route path="/super-admin/exam-bookings" element={<L><AdminMenus.SuperAdminExamBookingsPage /></L>} />
+              <Route path="/super-admin/trainer-poe" element={<L><AdminMenus.SuperAdminTrainerPoePage /></L>} />
+              <Route path="/super-admin/assessments" element={<L><AdminMenus.SuperAdminAssessmentsPage /></L>} />
+              <Route path="/super-admin/marks" element={<L><AdminMenus.SuperAdminMarksPage /></L>} />
+              <Route path="/super-admin/clearances" element={<L><AdminMenus.SuperAdminClearancesPage /></L>} />
+              <Route path="/super-admin/service-clearance" element={<L><AdminMenus.SuperAdminServiceClearancePage /></L>} />
+              <Route path="/super-admin/attachments" element={<L><AdminMenus.SuperAdminAttachmentsPage /></L>} />
+              <Route path="/super-admin/attachment-marks" element={<L><AdminMenus.SuperAdminAttachmentMarksPage /></L>} />
+              <Route path="/super-admin/mentoring-tools" element={<L><AdminMenus.SuperAdminMentoringToolsPage /></L>} />
+              <Route path="/super-admin/gis-tracking" element={<L><AdminMenus.SuperAdminGisPage /></L>} />
+              <Route path="/super-admin/logbooks" element={<L><AdminMenus.SuperAdminLogbooksPage /></L>} />
+              <Route path="/super-admin/companies" element={<L><AdminMenus.SuperAdminCompaniesPage /></L>} />
+              <Route path="/super-admin/notices" element={<L><AdminMenus.SuperAdminNoticesPage /></L>} />
+              <Route path="/super-admin/biometric-scanners" element={<L><AdminMenus.SuperAdminBiometricPage /></L>} />
+              <Route path="/super-admin/logs" element={<L><AdminMenus.SuperAdminLogsPage /></L>} />
+              <Route path="/super-admin/import" element={<L><AdminMenus.SuperAdminImportPage /></L>} />
               <Route path="/super-admin" element={<Navigate to="/super-admin/dashboard" replace />} />
               <Route path="/super-admin/*" element={<Pending />} />
             </Route>
 
-            {/* ── Department Admin ────────────────────────────────────── */}
+            {/* Dept Admin */}
             <Route element={<RequireRole roles={['dept_admin']} />}>
-              <Route
-                path="/dept-admin/dashboard"
-                element={
-                  <Lazy>
-                    <DeptAdminDashboardPage />
-                  </Lazy>
-                }
-              />
+              <Route path="/dept-admin/dashboard" element={<L><DeptAdminDashboardPage /></L>} />
+              <Route path="/dept-admin/welcome" element={<Navigate to="/dept-admin/dashboard" replace />} />
+              <Route path="/dept-admin/trainees-documents" element={<L><AdminMenus.DeptTraineesDocsPage /></L>} />
+              <Route path="/dept-admin/courses" element={<L><AdminMenus.DeptCoursesPage /></L>} />
+              <Route path="/dept-admin/classes" element={<L><AdminMenus.DeptClassesPage /></L>} />
+              <Route path="/dept-admin/trainers" element={<L><AdminMenus.DeptTrainersPage /></L>} />
+              <Route path="/dept-admin/students" element={<L><AdminMenus.DeptStudentsPage /></L>} />
+              <Route path="/dept-admin/units" element={<L><AdminMenus.DeptUnitsPage /></L>} />
+              <Route path="/dept-admin/assign-units" element={<L><AdminMenus.DeptAssignUnitsPage /></L>} />
+              <Route path="/dept-admin/credentials" element={<L><AdminMenus.DeptCredentialsPage /></L>} />
+              <Route path="/dept-admin/attendance" element={<L><AdminMenus.DeptAttendancePage /></L>} />
+              <Route path="/dept-admin/class-list" element={<L><AdminMenus.DeptClassListPage /></L>} />
+              <Route path="/dept-admin/trainee-search" element={<L><AdminMenus.DeptTraineeSearchPage /></L>} />
+              <Route path="/dept-admin/assessment-sheet" element={<L><AdminMenus.DeptAssessmentSheetPage /></L>} />
+              <Route path="/dept-admin/exam-bookings" element={<L><AdminMenus.DeptExamBookingsPage /></L>} />
+              <Route path="/dept-admin/marks" element={<L><AdminMenus.DeptMarksPage /></L>} />
+              <Route path="/dept-admin/trainer-documents" element={<L><AdminMenus.DeptTrainerDocsPage /></L>} />
+              <Route path="/dept-admin/trainee-poe" element={<L><AdminMenus.DeptTraineePoePage /></L>} />
+              <Route path="/dept-admin/attachments" element={<L><AdminMenus.DeptAttachmentsPage /></L>} />
+              <Route path="/dept-admin/attachment-marks" element={<L><AdminMenus.DeptAttachmentMarksPage /></L>} />
+              <Route path="/dept-admin/mentoring-tools" element={<L><AdminMenus.DeptMentoringToolsPage /></L>} />
+              <Route path="/dept-admin/gis-tracking" element={<L><AdminMenus.DeptGisPage /></L>} />
+              <Route path="/dept-admin/logbooks" element={<L><AdminMenus.DeptLogbooksPage /></L>} />
+              <Route path="/dept-admin/companies" element={<L><AdminMenus.DeptCompaniesPage /></L>} />
+              <Route path="/dept-admin/fingerprint-registration" element={<L><AdminMenus.DeptFingerprintPage /></L>} />
+              <Route path="/dept-admin/notices" element={<L><AdminMenus.DeptNoticesPage /></L>} />
+              <Route path="/dept-admin/import" element={<L><AdminMenus.DeptImportPage /></L>} />
               <Route path="/dept-admin" element={<Navigate to="/dept-admin/dashboard" replace />} />
               <Route path="/dept-admin/*" element={<Pending />} />
             </Route>
 
-            {/* ── Examination Officer ─────────────────────────────────── */}
+            {/* Examination Officer */}
             <Route element={<RequireRole roles={['examination_officer']} />}>
-              <Route
-                path="/examination-officer/dashboard"
-                element={
-                  <Lazy>
-                    <ExamOfficerDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/examination-officer"
-                element={<Navigate to="/examination-officer/dashboard" replace />}
-              />
+              <Route path="/examination-officer/dashboard" element={<L><ExamOfficerDashboardPage /></L>} />
+              <Route path="/examination-officer/exam-bookings" element={<L><RoleMenus.ExamOfficerBookingsPage /></L>} />
+              <Route path="/examination-officer/marks" element={<L><RoleMenus.ExamOfficerMarksPage /></L>} />
+              <Route path="/examination-officer" element={<Navigate to="/examination-officer/dashboard" replace />} />
               <Route path="/examination-officer/*" element={<Pending />} />
             </Route>
 
-            {/* ── Industry Mentor ─────────────────────────────────────── */}
+            {/* Industry Mentor */}
             <Route element={<RequireRole roles={['industry_mentor']} />}>
-              <Route
-                path="/industry-mentor/dashboard"
-                element={
-                  <Lazy>
-                    <IndustryMentorDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/industry-mentor"
-                element={<Navigate to="/industry-mentor/dashboard" replace />}
-              />
+              <Route path="/industry-mentor/dashboard" element={<L><IndustryMentorDashboardPage /></L>} />
+              <Route path="/industry-mentor/logbook" element={<L><RoleMenus.IndustryMentorLogbookPage /></L>} />
+              <Route path="/industry-mentor/competency" element={<L><RoleMenus.IndustryMentorCompetencyPage /></L>} />
+              <Route path="/industry-mentor/trainees" element={<L><RoleMenus.IndustryMentorTraineesPage /></L>} />
+              <Route path="/industry-mentor/weekly-attendance" element={<L><RoleMenus.IndustryMentorWeeklyAttendancePage /></L>} />
+              <Route path="/industry-mentor/location" element={<L><RoleMenus.IndustryMentorLocationPage /></L>} />
+              <Route path="/industry-mentor" element={<Navigate to="/industry-mentor/dashboard" replace />} />
               <Route path="/industry-mentor/*" element={<Pending />} />
             </Route>
 
-            {/* ── Internal Verifier ───────────────────────────────────── */}
+            {/* Internal Verifier */}
             <Route element={<RequireRole roles={['internal_verifier']} />}>
-              <Route
-                path="/internal-verifier/dashboard"
-                element={
-                  <Lazy>
-                    <InternalVerifierDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/internal-verifier"
-                element={<Navigate to="/internal-verifier/dashboard" replace />}
-              />
+              <Route path="/internal-verifier/dashboard" element={<L><InternalVerifierDashboardPage /></L>} />
+              <Route path="/internal-verifier/competency" element={<L><RoleMenus.InternalVerifierCompetencyPage /></L>} />
+              <Route path="/internal-verifier/attachments" element={<L><RoleMenus.InternalVerifierAttachmentsPage /></L>} />
+              <Route path="/internal-verifier/reports" element={<L><InternalVerifierReportsPage /></L>} />
+              <Route path="/internal-verifier" element={<Navigate to="/internal-verifier/dashboard" replace />} />
               <Route path="/internal-verifier/*" element={<Pending />} />
             </Route>
 
-            {/* ── Liaison Officer ─────────────────────────────────────── */}
+            {/* Liaison */}
             <Route element={<RequireRole roles={['liaison_officer']} />}>
-              <Route
-                path="/liaison-officer/dashboard"
-                element={
-                  <Lazy>
-                    <LiaisonDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/liaison-officer"
-                element={<Navigate to="/liaison-officer/dashboard" replace />}
-              />
+              <Route path="/liaison-officer/dashboard" element={<L><LiaisonDashboardPage /></L>} />
+              <Route path="/liaison-officer/periods" element={<L><RoleMenus.LiaisonPeriodsPage /></L>} />
+              <Route path="/liaison-officer/attachments" element={<L><RoleMenus.LiaisonAttachmentsPage /></L>} />
+              <Route path="/liaison-officer/logbooks" element={<L><RoleMenus.LiaisonLogbooksPage /></L>} />
+              <Route path="/liaison-officer/attachment-marks" element={<L><RoleMenus.LiaisonAttachmentMarksPage /></L>} />
+              <Route path="/liaison-officer/mentoring-tools" element={<L><RoleMenus.LiaisonMentoringToolsPage /></L>} />
+              <Route path="/liaison-officer/companies" element={<L><RoleMenus.LiaisonCompaniesPage /></L>} />
+              <Route path="/liaison-officer" element={<Navigate to="/liaison-officer/dashboard" replace />} />
               <Route path="/liaison-officer/*" element={<Pending />} />
             </Route>
 
-            {/* ── CDACC External Verifier ─────────────────────────────── */}
+            {/* CDACC */}
             <Route element={<RequireRole roles={['cdacc_verifier']} />}>
-              <Route
-                path="/cdacc-verifier/dashboard"
-                element={
-                  <Lazy>
-                    <CdaccDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/cdacc-verifier"
-                element={<Navigate to="/cdacc-verifier/dashboard" replace />}
-              />
+              <Route path="/cdacc-verifier/dashboard" element={<L><CdaccDashboardPage /></L>} />
+              <Route path="/cdacc-verifier/trainer-documents" element={<L><RoleMenus.CdaccTrainerDocumentsPage /></L>} />
+              <Route path="/cdacc-verifier/marks" element={<L><RoleMenus.CdaccMarksPage /></L>} />
+              <Route path="/cdacc-verifier/trainees" element={<L><RoleMenus.CdaccTraineesPage /></L>} />
+              <Route path="/cdacc-verifier/trainee-poe" element={<L><RoleMenus.CdaccTraineePoePage /></L>} />
+              <Route path="/cdacc-verifier/attachment-marks" element={<L><RoleMenus.CdaccAttachmentMarksPage /></L>} />
+              <Route path="/cdacc-verifier/mentoring-tools" element={<L><RoleMenus.CdaccMentoringToolsPage /></L>} />
+              <Route path="/cdacc-verifier/digital-logbook" element={<L><RoleMenus.CdaccDigitalLogbookPage /></L>} />
+              <Route path="/cdacc-verifier" element={<Navigate to="/cdacc-verifier/dashboard" replace />} />
               <Route path="/cdacc-verifier/*" element={<Pending />} />
             </Route>
 
-            {/* ── Workshop Technician ─────────────────────────────────── */}
+            {/* Workshop */}
             <Route element={<RequireRole roles={['workshop_technician']} />}>
-              <Route
-                path="/workshop-technician/dashboard"
-                element={
-                  <Lazy>
-                    <WorkshopDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/workshop-technician"
-                element={<Navigate to="/workshop-technician/dashboard" replace />}
-              />
+              <Route path="/workshop-technician/dashboard" element={<L><WorkshopDashboardPage /></L>} />
+              <Route path="/workshop-technician/inventory" element={<L><RoleMenus.WorkshopInventoryPage /></L>} />
+              <Route path="/workshop-technician" element={<Navigate to="/workshop-technician/dashboard" replace />} />
               <Route path="/workshop-technician/*" element={<Pending />} />
             </Route>
 
-            {/* ── Service departments (library / games / clearance) ───── */}
-            <Route
-              element={
-                <RequireRole roles={['library_hod', 'sports_hod', 'service_clearance_officer']} />
-              }
-            >
-              <Route
-                path="/service-dept/dashboard"
-                element={
-                  <Lazy>
-                    <ServiceDeptDashboardPage />
-                  </Lazy>
-                }
-              />
-              <Route
-                path="/service-dept"
-                element={<Navigate to="/service-dept/dashboard" replace />}
-              />
+            {/* Service dept */}
+            <Route element={<RequireRole roles={['library_hod', 'sports_hod', 'service_clearance_officer']} />}>
+              <Route path="/service-dept/dashboard" element={<L><ServiceDeptDashboardPage /></L>} />
+              <Route path="/service-dept/pending" element={<Navigate to="/clearance/service-dept" replace />} />
+              <Route path="/service-dept" element={<Navigate to="/service-dept/dashboard" replace />} />
               <Route path="/service-dept/*" element={<Pending />} />
             </Route>
 
-            {/* ── Admin oversight ─────────────────────────────────────── */}
+            {/* Oversight */}
             <Route element={<RequireRole roles={['registrar']} />}>
+              <Route path="/admin-oversight/registrar" element={<L><RegistrarDashboardPage /></L>} />
+              <Route path="/admin-oversight/registrar/admissions" element={<L><RoleMenus.OversightAdmissionsPage /></L>} />
               <Route
-                path="/admin-oversight/registrar"
-                element={
-                  <Lazy>
-                    <RegistrarDashboardPage />
-                  </Lazy>
-                }
+                path="/admin-oversight/registrar/clearances"
+                element={<L><RoleMenus.OversightClearancesPage endpoint="/admin-oversight/registrar/clearances" title="Clearance Requests" /></L>}
               />
               <Route path="/admin-oversight/registrar/*" element={<Pending />} />
             </Route>
 
             <Route element={<RequireRole roles={['deputy_principal']} />}>
+              <Route path="/admin-oversight/deputy-principal" element={<L><DeputyPrincipalDashboardPage /></L>} />
+              <Route path="/admin-oversight/deputy-principal/academic" element={<L><RoleMenus.OversightAcademicPage /></L>} />
               <Route
-                path="/admin-oversight/deputy-principal"
-                element={
-                  <Lazy>
-                    <DeputyPrincipalDashboardPage />
-                  </Lazy>
-                }
+                path="/admin-oversight/deputy-principal/clearances"
+                element={<L><RoleMenus.OversightClearancesPage endpoint="/admin-oversight/deputy-principal/clearances" title="Clearance Oversight" /></L>}
               />
               <Route path="/admin-oversight/deputy-principal/*" element={<Pending />} />
             </Route>
 
             <Route element={<RequireRole roles={['quality_assurance_officer']} />}>
-              <Route
-                path="/admin-oversight/quality-assurance"
-                element={
-                  <Lazy>
-                    <QualityAssuranceDashboardPage />
-                  </Lazy>
-                }
-              />
+              <Route path="/admin-oversight/quality-assurance" element={<L><QualityAssuranceDashboardPage /></L>} />
+              <Route path="/admin-oversight/quality-assurance/reports" element={<L><RoleMenus.QaReportsPage /></L>} />
+              <Route path="/admin-oversight/quality-assurance/approvals" element={<L><RoleMenus.QaApprovalsPage /></L>} />
               <Route path="/admin-oversight/quality-assurance/*" element={<Pending />} />
             </Route>
 
-            {/* ── Clearance approvers with no dedicated portal yet ────── */}
-            <Route
-              element={<RequireRole roles={['environment_hod', 'dean_students', 'finance_officer']} />}
-            >
-              <Route path="/clearance/*" element={<Pending />} />
+            <Route element={<RequireRole roles={['environment_hod', 'dean_students', 'finance_officer']} />}>
+              <Route path="/clearance/*" element={<L><SharedMods.ClearanceApproverPage /></L>} />
             </Route>
 
-            {/* Signed in but on an unknown path → that role's home. */}
             <Route path="/" element={<RoleHomeRedirect />} />
             <Route path="*" element={<RoleHomeRedirect />} />
           </Route>

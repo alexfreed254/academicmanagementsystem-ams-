@@ -358,4 +358,131 @@ student.get('/student/marks', async (c) => {
   })
 })
 
+student.get('/student/assessments', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('assessments')
+    .select('*, units(name, code)')
+    .eq('student_id', user.id)
+    .order('uploaded_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/exam-bookings', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('exam_bookings')
+    .select('*, units(name, code)')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/documents', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('trainee_documents')
+    .select('*')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/industrial-attachment', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('industrial_attachments')
+    .select('*, companies(name, address), units(name, code)')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/logbook', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('digital_logbook')
+    .select('*')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/attachment-marks', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: atts } = await db.from('industrial_attachments').select('id').eq('student_id', user.id)
+  const ids = ((atts ?? []) as { id: string }[]).map((a) => a.id)
+  if (!ids.length) return ok(c, { items: [] })
+  const { data } = await db.from('attachment_grades').select('*').in('attachment_id', ids)
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/mentoring-tool', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data: atts } = await db
+    .from('industrial_attachments')
+    .select('company_id')
+    .eq('student_id', user.id)
+  const companyIds = [
+    ...new Set(((atts ?? []) as { company_id?: string }[]).map((a) => a.company_id).filter(Boolean)),
+  ] as string[]
+  if (!companyIds.length) return ok(c, { items: [] })
+  const { data } = await db
+    .from('mentoring_tool_uploads')
+    .select('*, companies(name)')
+    .in('company_id', companyIds)
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/employment-status', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('employment_status')
+    .select('*')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/portfolio', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('assessments')
+    .select('*, units(name, code)')
+    .eq('student_id', user.id)
+    .eq('status', 'approved')
+    .order('uploaded_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/summative', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('summative_results')
+    .select('*, units(name, code)')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+  return ok(c, { items: data ?? [] })
+})
+
+student.get('/student/exam-booking-form', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const { data } = await db
+    .from('units')
+    .select('id, name, code')
+    .limit(100)
+  return ok(c, { items: data ?? [], student_id: user.id })
+})
+
 export default student

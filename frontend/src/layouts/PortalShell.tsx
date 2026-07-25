@@ -4,10 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '@/providers/AuthProvider'
 import { getPortalNav, getRoleTheme } from '@/config/navigation'
 import { fetchRecentNotifications } from '@/api/trainer'
-import type { NavItem } from '@/types'
 import '@/styles/portal-shell.css'
 
-const legacyBase = (import.meta.env.VITE_LEGACY_ORIGIN as string | undefined) || ''
 const ZOOM_MIN = 0
 const ZOOM_MAX = 200
 const ZOOM_KEY = 'ttti_zoom'
@@ -25,11 +23,6 @@ function applyPageZoom(pct: number) {
   if (!target) return
   ;(target.style as CSSStyleDeclaration & { zoom?: string }).zoom = String(pct / 100)
   localStorage.setItem(ZOOM_KEY, String(pct))
-}
-
-function resolveHref(item: NavItem) {
-  if (!item.external) return item.to
-  return legacyBase ? `${legacyBase.replace(/\/$/, '')}${item.to}` : item.to
 }
 
 /** Africa/Nairobi clock, matching partials/digital_clock.html. */
@@ -191,25 +184,41 @@ export function PortalShell({ title, children }: { title?: string; children: Rea
             {nav.map((section, si) => (
               <div key={si}>
                 {section.title ? <div className="menu-section">{section.title}</div> : null}
-                {section.items.map((item) =>
-                  item.external ? (
-                    <a key={item.to} href={resolveHref(item)} onClick={closeOnMobile}>
-                      <i className={`fas fa-${item.icon} fa-fw`} aria-hidden />
-                      <span className="nav-label">{item.label}</span>
-                    </a>
-                  ) : (
+                {section.items.map((item) => {
+                  const [itemPath, itemQuery = ''] = item.to.split('?')
+                  return (
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      end={item.to.endsWith('/dashboard')}
+                      end={itemPath.endsWith('/dashboard') && !itemQuery}
                       onClick={closeOnMobile}
-                      className={({ isActive }) => (isActive ? 'active' : undefined)}
+                      className={() => {
+                        const pathMatch =
+                          location.pathname === itemPath ||
+                          (itemPath !== '/' && location.pathname.startsWith(itemPath + '/'))
+                        if (!pathMatch) return undefined
+                        if (!itemQuery) {
+                          // Prefer exact path items over filtered siblings when no query on item.
+                          const hasMoreSpecific = section.items.some((other) => {
+                            if (other.to === item.to) return false
+                            const [op, oq = ''] = other.to.split('?')
+                            return op === itemPath && oq && location.search.includes(oq)
+                          })
+                          if (hasMoreSpecific) return undefined
+                          return location.pathname === itemPath || itemPath.endsWith('/dashboard')
+                            ? 'active'
+                            : location.pathname.startsWith(itemPath)
+                              ? 'active'
+                              : undefined
+                        }
+                        return location.search.includes(itemQuery) ? 'active' : undefined
+                      }}
                     >
                       <i className={`fas fa-${item.icon} fa-fw`} aria-hidden />
                       <span className="nav-label">{item.label}</span>
                     </NavLink>
-                  ),
-                )}
+                  )
+                })}
               </div>
             ))}
           </div>

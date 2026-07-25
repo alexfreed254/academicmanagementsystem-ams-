@@ -81,3 +81,24 @@ export async function checkWerkzeugHash(storedHash: string, password: string): P
     return false
   }
 }
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/** Werkzeug-compatible pbkdf2:sha256 hash for student password updates. */
+export async function generateWerkzeugHash(password: string, iterations = 600000): Promise<string> {
+  const saltBytes = crypto.getRandomValues(new Uint8Array(16))
+  const salt = bytesToHex(saltBytes)
+  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, [
+    'deriveBits',
+  ])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: encoder.encode(salt), iterations },
+    key,
+    256,
+  )
+  return `pbkdf2:sha256:${iterations}$${salt}$${bytesToHex(new Uint8Array(bits))}`
+}
