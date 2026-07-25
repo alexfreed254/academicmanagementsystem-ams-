@@ -19,6 +19,7 @@ import notificationRoutes from './routes/notifications'
 import trainerRoutes from './routes/trainer'
 import studentRoutes from './routes/student'
 import { err } from './lib/responses'
+import { ConfigError, envStatus } from './lib/env'
 import type { Env, AppVariables } from './types'
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>()
@@ -53,9 +54,17 @@ app.use('*', async (c, next) => {
   return handler(c, next)
 })
 
-app.get('/api/health', (c) =>
-  c.json({ ok: true, service: 'ttti-ams-api', environment: c.env.ENVIRONMENT ?? 'production' }),
-)
+app.get('/api/health', (c) => {
+  const secrets = envStatus(c.env)
+  const ready = Object.values(secrets).every(Boolean)
+  return c.json({
+    ok: true,
+    service: 'ttti-ams-api',
+    environment: c.env.ENVIRONMENT ?? 'production',
+    ready,
+    secrets,
+  })
+})
 
 const api = new Hono<{ Bindings: Env; Variables: AppVariables }>()
 api.route('/', authRoutes)
@@ -68,6 +77,16 @@ app.notFound((c) => err(c, 'Not found.', 404, 'not_found'))
 
 app.onError((e, c) => {
   console.error(`[ttti-ams-api] Unhandled error on ${c.req.method} ${c.req.path}:`, e)
+  if (e instanceof ConfigError) {
+    return err(c, e.message, 500, 'misconfigured')
+  }
+  const message = e instanceof Error ? e.message : 'Internal server error.'
+  // Surface actionable config/crypto errors to the client so dashboard mis-sets are visible.
+  if (
+    /supabaseKey|SESSION_SECRET|secret|Missing|required|sign|JWT|crypto/i.test(message)
+  ) {
+    return err(c, message, 500, 'server_error')
+  }
   return err(c, 'Internal server error.', 500, 'server_error')
 })
 

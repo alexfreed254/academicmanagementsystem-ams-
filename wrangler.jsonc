@@ -23,6 +23,15 @@
     "ALLOWED_ORIGINS": "http://localhost:5173,https://academic-management-system254.kasitetlawrence33.workers.dev",
     "ENVIRONMENT": "production"
   },
+  // Required at runtime (set in dashboard Settings → Variables and Secrets).
+  // Must be Runtime secrets — Build variables are NOT available to the Worker.
+  "secrets": {
+    "required": [
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SESSION_SECRET"
+    ]
+  },
   "observability": {
     "enabled": true
   }

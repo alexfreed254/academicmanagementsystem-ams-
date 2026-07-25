@@ -5,6 +5,7 @@ import { issueSessionToken, extractBearer, verifySessionToken } from '../lib/ses
 import { ok, err } from '../lib/responses'
 import { writeAuditLog } from '../lib/audit'
 import { loginSchema } from '../schemas'
+import { assertLoginEnv } from '../lib/env'
 import { STAFF_ROLES, publicUser, type Env, type AppVariables, type SessionUser } from '../types'
 
 const auth = new Hono<{ Bindings: Env; Variables: AppVariables }>()
@@ -39,6 +40,7 @@ auth.post('/auth/login', async (c) => {
     return err(c, first?.message ?? "login_type must be 'staff' or 'student'.", 400)
   }
   const data = parsed.data
+  assertLoginEnv(c.env)
   const db = getServiceClient(c.env)
 
   if (data.login_type === 'staff') {

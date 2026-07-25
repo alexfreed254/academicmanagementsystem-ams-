@@ -5,18 +5,27 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 // 1 day, matches Flask PERMANENT_SESSI
 
 /** Issue a stateless session token holding the safe profile subset. */
 export async function issueSessionToken(env: Env, user: SessionUser): Promise<string> {
+  const secret = env.SESSION_SECRET?.trim()
+  if (!secret) {
+    throw new Error('SESSION_SECRET is missing. Set it as a Runtime secret in Cloudflare.')
+  }
   const now = Math.floor(Date.now() / 1000)
-  return sign(
-    {
-      sub: user.id,
-      user,
-      iat: now,
-      exp: now + SESSION_TTL_SECONDS,
-      iss: 'ttti-ams',
-    },
-    env.SESSION_SECRET,
-    'HS256',
-  )
+  try {
+    return await sign(
+      {
+        sub: user.id,
+        user,
+        iat: now,
+        exp: now + SESSION_TTL_SECONDS,
+        iss: 'ttti-ams',
+      },
+      secret,
+      'HS256',
+    )
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`Failed to sign session token: ${msg}`)
+  }
 }
 
 /** Verify a Bearer token; returns the embedded user or null. */
