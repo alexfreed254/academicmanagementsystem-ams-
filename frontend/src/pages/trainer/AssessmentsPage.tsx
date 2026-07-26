@@ -9,7 +9,7 @@ import {
 } from '@/api/trainer'
 import { PortalShell } from '@/layouts/PortalShell'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
-import { getApiErrorMessage } from '@/lib/apiClient'
+import { getApiErrorMessage, legacyHref } from '@/lib/apiClient'
 
 type Tab = 'dashboard' | 'browse' | 'search'
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected'
@@ -390,12 +390,16 @@ function FileCard({
           >
             Return
           </button>
-          <a
-            href={`/trainer/assessment/${file.id}/review`}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
-          >
-            Full review
-          </a>
+          {legacyHref(`/trainer/assessment/${file.id}/review`) ? (
+            <a
+              href={legacyHref(`/trainer/assessment/${file.id}/review`) || undefined}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Full review
+            </a>
+          ) : null}
         </div>
       ) : null}
 
