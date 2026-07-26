@@ -8,42 +8,53 @@ A full-stack web application for managing academic operations at Thika Technical
 
 | Layer | Technology |
 |---|---|
-| Backend (production today) | Python · Flask · Gunicorn on **Render** |
-| Backend (Cloudflare Phase 1) | Cloudflare Workers · **Hono** · TypeScript (`workers/`) — `/api/v1` SPA contract |
+| Frontend (cutover) | **React 18 + Vite + TypeScript** (`frontend/`) → Cloudflare **Pages** (`ttti-ams`) |
+| Backend API (cutover) | Cloudflare **Workers** · **Hono** · TypeScript (`workers/`) → Worker `ttti-ams-api` |
+| Auth (SPA) | `Authorization: Bearer <session JWT>` (`SESSION_SECRET` on Worker) |
 | Database | Supabase (PostgreSQL + Row Level Security) |
-| Auth | Supabase Auth (JWT) for staff/employers · Werkzeug hashed passwords for students |
-| Storage | Supabase Storage (PDFs, images, evidence files) |
-| Frontend | **React 18 + Vite + TypeScript** (`frontend/`) → Cloudflare **Pages** |
-| Legacy UI | Jinja2 portals on Flask (unchanged until each screen is ported) |
-| PDF generation | ReportLab (Flask) · browser-print for Cloudflare |
-| Excel export | openpyxl (Flask until client-side port) |
+| Auth providers | Supabase Auth (staff) · Werkzeug hashes (students, verified in Worker) |
+| Storage | Supabase Storage (PDFs, images, evidence) |
+| Legacy host | Flask · Gunicorn on **Render** (PDF / Excel / biometric device until ported) |
+| PDF / Excel | Browser-print via Workers `/print/*` · ReportLab/openpyxl on Flask legacy |
 
-See `MIGRATION_INVENTORY.md` and `DEPLOYMENT.md` for the Cloudflare cutover plan.
+See `MIGRATION_INVENTORY.md` and `DEPLOYMENT.md` for cutover steps.
+
 ---
 
 ## System Architecture
 
-**Source of truth**
+**Cloudflare cutover path (approved):**
+
+```
+Users
+  ↓
+Cloudflare (DNS · SSL/TLS · CDN · WAF · DDoS)
+  ↓
+Cloudflare Pages  — React SPA (frontend/)
+  ↓ HTTPS  Authorization: Bearer <session JWT>
+Cloudflare Workers — Hono API (workers/)  →  /api/v1/*
+  ↓ service-role (Worker secret only)
+Supabase — PostgreSQL + Auth + Storage + RLS
+```
 
 | Layer | Path | Role |
 |---|---|---|
-| Design / UI | `templates/` + `static/` | Jinja portals (authoritative look & screens) |
-| Functionality | `routes/` + helpers | Flask blueprints (authoritative business logic) |
-| Data | Supabase | PostgreSQL + Auth + Storage + RLS |
-| Cloudflare | `Dockerfile` + `src/index.ts` | Container runs Flask; Worker proxies to it |
+| SPA UI | `frontend/` | Portals (React Router + Tailwind) |
+| API | `workers/` | Hono routes, RBAC, business logic |
+| Reference rules | `routes/` (Flask) | Port endpoint-by-endpoint; do not invent rules |
+| Design reference | `templates/` | Visual parity for React pages |
+| Legacy Flask | Render / optional Containers | Biometric, ReportLab, Excel |
 
-**Production path (Cloudflare Containers):**
+Local:
 
+```bash
+cd workers && cp .dev.vars.example .dev.vars   # fill secrets
+npm ci && npm run check && npx wrangler dev    # :8787
+
+cd ../frontend && npm ci && npm run dev        # :5173 → proxies /api to Worker
 ```
-Browser → Cloudflare Worker → Flask Container (gunicorn)
-                                 ├─ routes/*     (functionality)
-                                 ├─ templates/*  (design)
-                                 └─ static/*
-                              → Supabase
-```
 
-Optional React SPA under `frontend/` is an incremental migration experiment (`/spa`).
-Live portals remain Jinja until each screen is deliberately cut over.
+Deploy: `.github/workflows/deploy-pages.yml` + `deploy-workers.yml` (see `DEPLOYMENT.md`).
 
 ---
 
@@ -69,8 +80,8 @@ Live portals remain Jinja until each screen is deliberately cut over.
 | Biometric scanner | `/biometric` | Fingerprint sensor API endpoint for classroom attendance |
 
 Access control is enforced at two layers:
-1. **Python decorators** — role check before any query runs
-2. **Supabase RLS** — row-level policies on every table (department isolation at DB level)
+1. **Workers RBAC** (`middleware/auth.ts` + `middleware/rbac.ts`) — role + department checks before queries
+2. **Supabase RLS** — row-level policies on tables (defence in depth; Worker uses service-role)
 
 ---
 

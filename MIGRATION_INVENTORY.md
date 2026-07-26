@@ -1,10 +1,10 @@
 # TTTI AMS — Cloudflare Migration Inventory
 
 **Status:** Inventory complete. **Target architecture frozen: Pages + Hono Workers.**  
-**Implementation:** Mid Phase 3–5 in code (~235 Hono handlers + full React AppRouter). Cutover / DNS / Excel / biometric still open.  
+**Implementation:** Cutover-ready in repo (Workers ~235 handlers + React AppRouter + CI). Dashboard secrets / DNS / legacy PDF·Excel·biometric still operator steps.  
 **Date:** 2026-07-26  
 **Architecture (approved):** Cloudflare Pages (React) → Workers (Hono Bearer JWT) → Supabase. Flask kept for biometric device API + ReportLab/openpyxl until ported.  
-**Rule:** Do not rewrite blindly. Port from Flask `routes/*.py` into existing `workers/` modules. Do not cut over production until parity gates pass.
+**Rule:** Do not rewrite blindly. Port from Flask `routes/*.py` into existing `workers/` modules. Do not cut over production DNS until parity gates pass.
 
 Canonical inventory for the Cloudflare migration. Update this file in place when the surface changes.
 
