@@ -12,7 +12,6 @@ const LoginPage = lazy(() => import('@/pages/auth/LoginPage'))
 const ChangePasswordPage = lazy(() => import('@/pages/auth/ChangePasswordPage'))
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'))
 const StudentRegisterPage = lazy(() => import('@/pages/auth/StudentRegisterPage'))
-const LandingPage = lazy(() => import('@/pages/main/LandingPage'))
 const AboutPage = lazy(() => import('@/pages/main/AboutPage'))
 const ApplyPage = lazy(() => import('@/pages/main/ApplyPage'))
 const ContactPage = lazy(() => import('@/pages/main/ContactPage'))
@@ -174,11 +173,11 @@ export function AppRouter() {
     <BrowserRouter>
       <ErrorBoundary>
         <Routes>
-          <Route path="/" element={<L><LandingPage /></L>} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<L><LoginPage /></L>} />
           <Route path="/about" element={<L><AboutPage /></L>} />
           <Route path="/apply" element={<L><ApplyPage /></L>} />
           <Route path="/contact" element={<L><ContactPage /></L>} />
-          <Route path="/login" element={<L><LoginPage /></L>} />
           <Route path="/auth/forgot-password" element={<L><ForgotPasswordPage /></L>} />
           <Route path="/auth/student-register" element={<L><StudentRegisterPage /></L>} />
           <Route path="/clearance/verify" element={<L><ClearanceDetailPages.ClearanceVerifyPage /></L>} />
