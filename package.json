@@ -2,12 +2,15 @@
   "name": "my-ams-project",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "npm run build:frontend",
-    "build:frontend": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "build:frontend": "npm --prefix frontend ci --no-fund --no-audit && npm --prefix frontend run build",
     "dev": "npm run build:frontend && wrangler dev",
     "dev:api": "npm --prefix workers run dev",
-    "deploy": "npm run build:frontend && wrangler deploy",
+    "deploy": "node ./scripts/cf-deploy.mjs",
     "typecheck": "npm --prefix workers run check"
   },
   "devDependencies": {

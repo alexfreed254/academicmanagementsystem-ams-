@@ -4,7 +4,11 @@
 #   /*       → React SPA (frontend/dist Worker Assets)
 #   /api/*   → Hono API (workers/src)
 #
-# Deploy: npm run deploy  (builds frontend, then wrangler deploy)
+# Deploy (Cloudflare Workers Builds):
+#   Deploy command MUST be:  npm run deploy
+#   (builds frontend/dist, then wrangler deploy)
+#   Plain `npx wrangler deploy` fails if frontend/dist is missing.
+# See CLOUDFLARE_BUILDS.md
 #
 # Secrets: SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 
