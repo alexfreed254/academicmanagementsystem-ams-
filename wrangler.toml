@@ -18,6 +18,10 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 preview_urls = true
 
+# Runs before every `wrangler deploy` (including bare `npx wrangler deploy` in CF Builds)
+[build]
+command = "npm run build:frontend"
+
 # React website + SPA fallback (open workers.dev → login UI, not JSON)
 [assets]
 directory = "./frontend/dist"

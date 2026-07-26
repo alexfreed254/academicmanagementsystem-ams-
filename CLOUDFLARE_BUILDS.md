@@ -8,10 +8,12 @@ Your Worker URL should show the **React website**, not API JSON.
 
 | Setting | Value |
 |---|---|
-| **Build command** | *(leave empty or)* `npm run build` |
-| **Deploy command** | `npm run deploy` |
+| **Build command** | *(optional)* leave empty |
+| **Deploy command** | `npx wrangler deploy` **or** `npm run deploy` |
 
-Do **not** use bare `npx wrangler deploy` — that skips `frontend/dist` and you only get the API.
+`wrangler.toml` `[build]` runs `npm run build:frontend` automatically before deploy,
+so bare `npx wrangler deploy` now creates `frontend/dist` (fixes the CI error
+`assets.directory … frontend/dist does not exist`).
 
 After the next green deploy, open:
 
