@@ -28,33 +28,32 @@ See `MIGRATION_INVENTORY.md` and `DEPLOYMENT.md` for cutover steps.
 ```
 Users
   ↓
-Cloudflare (DNS · SSL/TLS · CDN · WAF · DDoS)
-  ↓
-Cloudflare Pages  — React SPA (frontend/)
-  ↓ HTTPS  Authorization: Bearer <session JWT>
-Cloudflare Workers — Hono API (workers/)  →  /api/v1/*
-  ↓ service-role (Worker secret only)
-Supabase — PostgreSQL + Auth + Storage + RLS
+Cloudflare Worker  academic-management-system-254
+  ├─ /*       → React SPA (Worker Assets from frontend/dist)
+  └─ /api/*   → Hono API (workers/) → Supabase
 ```
+
+Open the **workers.dev** URL (or custom domain) for the website.
+`/api/health` and `/api/v1/*` are JSON API only.
+
+Optional separate Pages project (`ttti-ams`) can still host the SPA; same-origin
+Worker Assets is the path that makes one URL show the website.
 
 | Layer | Path | Role |
 |---|---|---|
-| SPA UI | `frontend/` | Portals (React Router + Tailwind) |
-| API | `workers/` | Hono routes, RBAC, business logic |
-| Reference rules | `routes/` (Flask) | Port endpoint-by-endpoint; do not invent rules |
-| Design reference | `templates/` | Visual parity for React pages |
-| Legacy Flask | Render / optional Containers | Biometric, ReportLab, Excel |
+| SPA UI | `frontend/` → built to `frontend/dist` | Portals (React) |
+| API | `workers/` | Hono `/api/v1` |
+| Deploy | root `npm run deploy` | Build SPA + `wrangler deploy` |
+| Builds guide | `CLOUDFLARE_BUILDS.md` | Dashboard deploy command |
 
 Local:
 
 ```bash
-cd workers && cp .dev.vars.example .dev.vars   # fill secrets
-npm ci && npm run check && npx wrangler dev    # :8787
-
-cd ../frontend && npm ci && npm run dev        # :5173 → proxies /api to Worker
+npm run build:frontend
+npx wrangler dev    # :8787 — site + /api
 ```
 
-Deploy: `.github/workflows/deploy-pages.yml` + `deploy-workers.yml` (see `DEPLOYMENT.md`).
+Production: set Cloudflare Deploy command to `npm run deploy` (see `CLOUDFLARE_BUILDS.md`).
 
 ---
 

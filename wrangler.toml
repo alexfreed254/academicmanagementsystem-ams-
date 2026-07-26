@@ -1,12 +1,14 @@
 # TTTI AMS — Cloudflare Workers Builds (root deploy)
 #
-# Cloudflare Git integration runs `npx wrangler deploy` at the repo root.
-# Cutover architecture: Hono API here → Pages SPA (frontend/) → Supabase.
-# Flask Containers are NOT deployed from this file (registry Unauthorized without
-# Workers Paid). Optional Containers config: wrangler.containers.toml
+# One Worker URL serves BOTH:
+#   /*       → React SPA (frontend/dist Worker Assets)
+#   /api/*   → Hono API (workers/src)
 #
-# Secrets (Dashboard or wrangler secret put):
-#   SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+# Cloudflare Dashboard → Builds → Deploy command MUST be:
+#   npm run deploy
+# (builds frontend, then wrangler deploy — plain `npx wrangler deploy` has no SPA)
+#
+# Secrets: SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 
 name = "academic-management-system-254"
 main = "workers/src/index.ts"
@@ -16,7 +18,15 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 preview_urls = true
 
-# Drop Flask Container DO registered by earlier deploys (v1 migration below).
+# React website + SPA fallback (open workers.dev → login UI, not JSON)
+[assets]
+directory = "./frontend/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# API runs in the Worker; everything else is the React site
+run_worker_first = ["/api/*"]
+
+# Drop Flask Container DO registered by earlier deploys
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["FlaskContainer"]
@@ -42,8 +52,6 @@ head_sampling_rate = 1
 
 [vars]
 SUPABASE_URL = "https://kbxaawuxlycetxifltxf.supabase.co"
+# Same-origin SPA does not need CORS; keep localhost + Pages for alternate hosts
 ALLOWED_ORIGINS = "http://localhost:5173,https://ttti-ams.pages.dev"
 ENVIRONMENT = "production"
-
-# Optional custom domain after DNS is on Cloudflare:
-# routes = [{ pattern = "api.yourdomain.ac.ke", custom_domain = true }]

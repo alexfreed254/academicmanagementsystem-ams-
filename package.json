@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "npm run build:frontend",
     "build:frontend": "npm --prefix frontend ci && npm --prefix frontend run build",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "npm run build:frontend && wrangler deploy",
     "deploy:containers": "wrangler deploy -c wrangler.containers.toml",
     "deploy:workers": "npm --prefix workers run deploy",
     "tail": "wrangler tail",
