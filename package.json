@@ -10,7 +10,9 @@
     "tail": "wrangler tail",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@cloudflare/containers": "^0.0.30"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250712.0",
     "typescript": "~5.7.2",

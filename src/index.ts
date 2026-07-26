@@ -1,73 +1,112 @@
 /**
- * TTTI AMS — Cloudflare Worker (edge proxy)
+ * TTTI AMS — Cloudflare Worker + Flask Container
  *
- * SOURCE OF TRUTH remains Flask:
- *   - Design / UI  → templates/
- *   - Functionality → routes/
+ * SOURCE OF TRUTH:
+ *   - Design / UI  → templates/   (Jinja)
+ *   - Functionality → routes/     (Flask blueprints) + app helpers
  *
- * This Worker forwards ALL HTTP traffic to FLASK_ORIGIN (Render or any
- * gunicorn host). Cloudflare Containers are disabled until the account can
- * push images (Workers Paid). Dockerfile stays in the repo for that upgrade.
+ * All HTTP traffic is proxied to the unmodified Flask app in the Container.
+ * No Worker Assets / frontend/dist required for deploy.
  */
+import { Container, getContainer } from '@cloudflare/containers'
+
 export interface Env {
-  /** Base URL of the live Flask app, e.g. https://your-app.onrender.com (no trailing slash) */
-  FLASK_ORIGIN: string
+  FLASK_CONTAINER: DurableObjectNamespace<FlaskContainer>
+  SECRET_KEY: string
+  SUPABASE_URL: string
+  SUPABASE_ANON_KEY: string
+  SUPABASE_SERVICE_ROLE_KEY: string
+  BIOMETRIC_DEVICE_SECRET?: string
   SPA_ORIGINS?: string
+  ALLOW_STUDENT_SELF_REGISTER?: string
+  PRIVATE_STORAGE?: string
   FLASK_ENV?: string
+  SETUP_PROFILE_TOKEN?: string
 }
 
-const HOP_BY_HOP = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailers',
-  'transfer-encoding',
-  'upgrade',
-  'cf-connecting-ip',
-  'cf-ray',
-  'cf-visitor',
-  'cf-ipcountry',
-  'x-forwarded-proto',
-  'x-real-ip',
-])
+/**
+ * Durable Object that owns the Flask container lifecycle.
+ * class_name must match wrangler.toml [[containers]] / durable_objects binding.
+ */
+export class FlaskContainer extends Container<Env> {
+  defaultPort = 8080
+  sleepAfter = '15m'
+  enableInternet = true
 
-function filterRequestHeaders(src: Headers): Headers {
-  const out = new Headers()
-  src.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) out.set(key, value)
-  })
-  return out
+  constructor(ctx: DurableObjectState<{}>, env: Env) {
+    super(ctx, env)
+    this.envVars = {
+      PORT: '8080',
+      FLASK_ENV: env.FLASK_ENV || 'production',
+      SECRET_KEY: env.SECRET_KEY || '',
+      SUPABASE_URL: env.SUPABASE_URL || '',
+      SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY || '',
+      SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY || '',
+      BIOMETRIC_DEVICE_SECRET: env.BIOMETRIC_DEVICE_SECRET || '',
+      SPA_ORIGINS: env.SPA_ORIGINS || '',
+      SPA_CROSS_SITE: 'false',
+      SESSION_COOKIE_SECURE: 'true',
+      ALLOW_STUDENT_SELF_REGISTER: env.ALLOW_STUDENT_SELF_REGISTER || 'false',
+      PRIVATE_STORAGE: env.PRIVATE_STORAGE || '',
+      SETUP_PROFILE_TOKEN: env.SETUP_PROFILE_TOKEN || '',
+    }
+  }
+
+  override onStart(): void {
+    console.log('[FlaskContainer] started — serving routes/ + templates/')
+  }
+
+  override onStop(params: { exitCode: number; reason: string }): void {
+    console.log('[FlaskContainer] stopped', params)
+  }
+
+  override onError(error: unknown): void {
+    console.error('[FlaskContainer] error', error)
+    throw error
+  }
+}
+
+function forwardToFlask(request: Request, env: Env): Promise<Response> {
+  const stub = getContainer(env.FLASK_CONTAINER, 'ttti-flask')
+  return stub.fetch(request)
+}
+
+async function proxyFlask(request: Request, env: Env): Promise<Response> {
+  try {
+    const res = await forwardToFlask(request, env)
+    const url = new URL(request.url)
+    const headers = new Headers(res.headers)
+    if (!headers.has('Access-Control-Allow-Origin')) {
+      headers.set('Access-Control-Allow-Origin', url.origin)
+      headers.set('Access-Control-Allow-Credentials', 'true')
+    }
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    })
+  } catch (err) {
+    console.error('[worker] Flask container proxy failed', err)
+    return new Response(
+      '<!DOCTYPE html><html><body><h1>Service starting</h1>' +
+        '<p>The academic system container is cold-starting. Refresh in a few seconds.</p></body></html>',
+      {
+        status: 503,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '5' },
+      },
+    )
+  }
 }
 
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-    const origin = (env.FLASK_ORIGIN || '').replace(/\/$/, '')
-    if (!origin) {
-      return new Response(
-        [
-          '<!DOCTYPE html><html><body style="font-family:system-ui;padding:2rem">',
-          '<h1>FLASK_ORIGIN not set</h1>',
-          '<p>In Cloudflare Dashboard → Workers →',
-          ' <code>academic-management-system-254</code> → Settings → Variables,</p>',
-          '<p>add <strong>FLASK_ORIGIN</strong> =',
-          ' your Render URL (e.g. <code>https://thika-technical-training-institute-ams.onrender.com</code>).</p>',
-          '<p>Containers stay off until Workers Paid can push images',
-          ' (current CI error: <code>Unauthorized</code> on container registry).</p>',
-          '</body></html>',
-        ].join(''),
-        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
-      )
-    }
-
-    const incoming = new URL(request.url)
+    const url = new URL(request.url)
 
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': incoming.origin,
+          'Access-Control-Allow-Origin': url.origin,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers':
             'Content-Type, Authorization, X-CSRFToken, X-CSRF-Token',
@@ -77,40 +116,7 @@ export default {
       })
     }
 
-    const target = new URL(incoming.pathname + incoming.search, origin)
-    const headers = filterRequestHeaders(request.headers)
-    headers.set('X-Forwarded-Host', incoming.host)
-    headers.set('X-Forwarded-Proto', incoming.protocol.replace(':', ''))
-
-    try {
-      const upstream = await fetch(target.toString(), {
-        method: request.method,
-        headers,
-        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-        redirect: 'manual',
-      })
-
-      const outHeaders = new Headers(upstream.headers)
-      if (!outHeaders.has('Access-Control-Allow-Origin')) {
-        outHeaders.set('Access-Control-Allow-Origin', incoming.origin)
-        outHeaders.set('Access-Control-Allow-Credentials', 'true')
-      }
-
-      return new Response(upstream.body, {
-        status: upstream.status,
-        statusText: upstream.statusText,
-        headers: outHeaders,
-      })
-    } catch (err) {
-      console.error('[worker] upstream Flask fetch failed', err)
-      return new Response(
-        '<!DOCTYPE html><html><body><h1>Upstream unavailable</h1>' +
-          `<p>Could not reach Flask at <code>${origin}</code>. Check Render is up and FLASK_ORIGIN is correct.</p></body></html>`,
-        {
-          status: 502,
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        },
-      )
-    }
+    // Entire app: Flask routes/ + templates/ + static/ + /api
+    return proxyFlask(request, env)
   },
 }

@@ -59,15 +59,7 @@ cd "C:\Users\user\Desktop\ACADEMIC MANAGEMENT SYSTEM"
 npm install
 ```
 
-### B. Build the React SPA
-
-```bash
-npm run build:frontend
-```
-
-Confirm `frontend/dist/index.html` exists.
-
-### C. Configure secrets (once per environment)
+### B. Configure secrets (once per environment)
 
 ```bash
 npx wrangler login
@@ -173,35 +165,82 @@ Same Worker hostname for Jinja portals + `/api` ⇒ **same-origin**.
 ## 6. CI failure: `✘ [ERROR] Unauthorized` after Docker build
 
 **What happened:** Worker script upload OK → Dockerfile build OK → **push to
-Cloudflare container registry rejected** (`Unauthorized`).
+Cloudflare’s container registry rejected** (`Unauthorized`).
 
-**Cause:** Cloudflare Containers need a **Workers Paid** plan (and Containers
-enabled on the account). This is not a bug in `templates/` or `routes/`.
+This is almost always **account plan or token/registry auth** — not a bug in
+`templates/`, `routes/`, `Dockerfile`, or the Container binding. Stay on Cloudflare
+and fix auth as below.
 
-**Current workaround (in this repo):** Containers are **disabled** in
-`wrangler.toml`. The Worker proxies all traffic to **`FLASK_ORIGIN`** (your
-existing Render Flask/gunicorn URL). Design + functionality still come from
-`templates/` + `routes/` on Render.
+### A. Workers Paid (most common root cause)
 
-### After the next deploy succeeds
+Containers require **Workers Paid**. Free accounts often get a bare `Unauthorized`
+(or opaque 403) with no “upgrade your plan” hint after the image builds.
 
-1. Cloudflare Dashboard → Workers → `academic-management-system-254` → **Settings → Variables**
-2. Set **FLASK_ORIGIN** = your Render URL, e.g.  
-   `https://thika-technical-training-institute-ams.onrender.com`  
-   (no trailing slash)
-3. Keep Flask secrets (`SECRET_KEY`, `SUPABASE_*`) on **Render**, not in the Worker
+1. Dashboard → **Workers & Pages → Plans** → upgrade to **Workers Paid**
+2. Open **Workers & Pages → Containers** — you should see Containers UI, not a waitlist/enable wall
+3. Redeploy
 
-### When you upgrade to Workers Paid
+### B. API token permissions (GitHub Actions / CI with `CLOUDFLARE_API_TOKEN`)
 
-1. Uncomment the `[[containers]]` / Durable Object blocks in `wrangler.toml`
-2. Restore `src/index.ts` Container proxy (see git history / `Dockerfile`)
-3. Re-add `@cloudflare/containers` and redeploy
+Older tokens often omit Containers. Edit or recreate the token:
 
-Checklist if you still want Containers now:
+**My Profile → API Tokens → Edit** (or create from **Edit Cloudflare Workers** template), then ensure:
 
-1. Workers & Pages → Plans → **Workers Paid**
-2. Confirm Containers are available for the account
-3. Secrets on the Worker only matter once Flask runs *inside* the Container
+| Permission | Why |
+|---|---|
+| **Workers Scripts:Edit** | Upload the Worker |
+| **Workers Containers:Edit** (or Account → **Cloudflare Containers** / Containers write) | Push images + manage container apps |
+| **Account Settings:Read** | Resolve account ID during registry push |
+
+Also confirm CI env vars match the **same** account where Containers is enabled:
+
+```
+CLOUDFLARE_ACCOUNT_ID=<account with Containers>
+CLOUDFLARE_API_TOKEN=<token with scopes above>
+```
+
+`Cloudflare Images:Edit` does **not** cover Containers.
+
+### C. Local deploy (clearest errors)
+
+```bash
+npx wrangler logout
+npx wrangler login
+npx wrangler whoami
+npx wrangler containers images list
+npx wrangler deploy
+```
+
+If `containers images list` fails with Unauthorized, the account/token cannot use the
+registry yet (plan or permissions) — fix that before fighting Dockerfile changes.
+
+> Note: some guides mention `wrangler containers login`. Current Wrangler exposes
+> `containers build|push|images|…` but **not** a separate `containers login`;
+> OAuth from `wrangler login` (or a scoped API token) is the auth path.
+
+### D. Cloudflare Git / dashboard Builds (your log shape)
+
+Logs under `/opt/buildhome/repo` + `npx wrangler deploy` are **Workers Builds**
+(Git integration). Cloudflare usually injects deploy credentials automatically —
+token scoping is less often the issue than **Paid + Containers enabled**.
+
+If Builds keep failing after Paid is on: redeploy from dashboard, or run local
+`wrangler deploy` once to confirm registry push works with your user OAuth.
+
+### E. After a green Containers deploy
+
+Set Worker **secrets** (injected into Flask via `FlaskContainer.envVars`):
+
+```bash
+npx wrangler secret put SECRET_KEY
+npx wrangler secret put SUPABASE_ANON_KEY
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+# optional:
+npx wrangler secret put BIOMETRIC_DEVICE_SECRET
+npx wrangler secret put SETUP_PROFILE_TOKEN
+```
+
+Then set `SPA_ORIGINS` in dashboard/`[vars]` to your real `*.workers.dev` URL.
 
 ---
 
