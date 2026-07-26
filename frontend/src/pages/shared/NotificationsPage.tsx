@@ -121,7 +121,13 @@ export default function NotificationsPage() {
                   </div>
                 </div>
                 {n.action_url ? (
-                  <Link to={n.action_url} style={{ fontSize: 12, fontWeight: 700, color: '#1565c0', alignSelf: 'center' }}>
+                  <Link
+                    to={n.action_url}
+                    onClick={() => {
+                      if (!n.is_read) void api.post(`/api/v1/notifications/${n.id}/read`)
+                    }}
+                    style={{ fontSize: 12, fontWeight: 700, color: '#1565c0', alignSelf: 'center' }}
+                  >
                     Open
                   </Link>
                 ) : null}

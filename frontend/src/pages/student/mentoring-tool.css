@@ -1,0 +1,34 @@
+/* Port of templates/student/mentoring_tool.html */
+.mt-wrap{padding:24px;background:#f1f5f9;min-height:calc(100vh - 64px)}
+.mt-hero{background:linear-gradient(135deg,#0b1735 0%,#0f2255 55%,#1e40af 100%);border-radius:14px;padding:22px 28px;margin-bottom:20px;color:#fff}
+.mt-hero h1{font-size:18px;font-weight:800;margin:0 0 3px}
+.mt-hero p{font-size:12.5px;color:#bfdbfe;margin:0}
+.mt-upload-card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:24px;margin-bottom:24px}
+.mt-upload-card h2{font-size:14px;font-weight:800;color:#0f172a;margin:0 0 16px}
+.mt-form-grid{display:grid;gap:14px}
+.mt-field label{display:block;font-size:11.5px;font-weight:700;color:#374151;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.mt-field input[type=text],.mt-field textarea{width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;color:#0f172a;box-sizing:border-box;font-family:inherit}
+.mt-field textarea{min-height:70px;resize:vertical}
+.mt-dropzone{border:2px dashed #cbd5e1;border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;background:#f8fafc;position:relative}
+.mt-dropzone.has-file{border-color:#3b82f6;background:#eff6ff}
+.mt-dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.mt-dz-text{font-size:13px;font-weight:600;color:#64748b}
+.mt-dz-sub{font-size:11.5px;color:#94a3b8;margin-top:4px}
+.mt-upload-btn{margin-top:16px;width:100%;padding:12px;background:linear-gradient(135deg,#0b1735,#1e40af);color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer}
+.mt-upload-btn:disabled{opacity:.6;cursor:not-allowed}
+.mt-list-card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden}
+.mt-list-head{background:linear-gradient(135deg,#0b1735,#0f2255);color:#fff;padding:13px 18px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.mt-list-head .count{margin-left:auto;font-size:11px;opacity:.7;background:rgba(255,255,255,.12);border-radius:20px;padding:2px 10px}
+.mt-file-row{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #f1f5f9}
+.mt-file-icon{width:42px;height:42px;border-radius:10px;background:#fee2e2;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#dc2626;flex-shrink:0}
+.mt-file-info{flex:1;min-width:0}
+.mt-file-title{font-size:13px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt-file-meta{font-size:11px;color:#64748b;margin-top:2px}
+.mt-file-desc{font-size:12px;color:#475569;margin-top:3px}
+.mt-file-actions{display:flex;gap:6px;flex-shrink:0}
+.btn-view{display:inline-flex;padding:6px 12px;background:#eff6ff;color:#1d4ed8;border:1.5px solid #bfdbfe;border-radius:7px;font-size:11.5px;font-weight:700;text-decoration:none}
+.btn-del{display:inline-flex;padding:6px 12px;background:#fff0f0;color:#dc2626;border:1.5px solid #fca5a5;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer}
+.mt-empty{padding:50px 24px;text-align:center;color:#94a3b8}
+.mt-alert{border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;font-weight:600}
+.mt-alert.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d}
+.mt-alert.bad{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}

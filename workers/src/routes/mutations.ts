@@ -1059,26 +1059,143 @@ mutations.post('/student/employment-status', requireRole('student'), async (c) =
   const user = c.get('user')
   const db = getServiceClient(c.env)
   const body = await bodyJson(c)
-  const employerName = String(body.employer_name || '').trim()
-  const position = String(body.position || '').trim()
-  const status = String(body.status || 'employed').trim()
 
-  if (!employerName) return err(c, 'Employer name is required.', 400)
+  // Flask employment_tracking shape
+  const employmentStatus = String(body.employment_status || body.status || '').trim()
+  if (!employmentStatus) return err(c, 'Employment status is required.', 400)
 
-  const { data, error } = await db
-    .from('employment_tracking')
-    .insert({
-      student_id: user.id,
-      employer_name: employerName,
-      position: position || null,
-      status,
-      start_date: String(body.start_date || '').trim() || null,
-    })
+  const companyName = String(body.company_name || body.employer_name || '').trim()
+  const jobTitle = String(body.job_title || body.position || '').trim()
+  const startDate = String(body.start_date || '').trim()
+  const locationAddress = String(body.location_address || '').trim()
+  const latitude = body.latitude !== undefined && body.latitude !== '' ? Number(body.latitude) : null
+  const longitude = body.longitude !== undefined && body.longitude !== '' ? Number(body.longitude) : null
+
+  const updateData: Record<string, unknown> = {
+    employment_status: employmentStatus,
+    company_name: employmentStatus === 'employed' || employmentStatus === 'self_employed' ? companyName || null : null,
+    job_title: employmentStatus === 'employed' || employmentStatus === 'self_employed' ? jobTitle || null : null,
+    start_date: employmentStatus === 'employed' || employmentStatus === 'self_employed' ? startDate || null : null,
+    latitude: latitude != null && !Number.isNaN(latitude) ? latitude : null,
+    longitude: longitude != null && !Number.isNaN(longitude) ? longitude : null,
+    location_address: locationAddress || null,
+    updated_at: nowIso(),
+    // legacy aliases used by InteractiveTablePage
+    employer_name: companyName || null,
+    position: jobTitle || null,
+    status: employmentStatus,
+  }
+
+  const { data: existing } = await db.from('employment_tracking').select('id').eq('student_id', user.id).limit(1)
+  const row = ((existing ?? []) as Row[])[0]
+  if (row?.id) {
+    let data = { ...updateData }
+    for (let i = 0; i < 12; i++) {
+      const { error } = await db.from('employment_tracking').update(data).eq('id', row.id as string)
+      if (!error) {
+        writeAuditLog(c, 'update_employment_status', `student:${user.id}`)
+        return ok(c, { updated: true, id: row.id })
+      }
+      const msg = error.message || ''
+      const unknownCol = msg.match(/'(\w+)' column/) || msg.match(/Could not find the '(\w+)' column/)
+      if (unknownCol) {
+        delete data[unknownCol[1]]
+        continue
+      }
+      return err(c, msg, 400)
+    }
+  } else {
+    let data: Record<string, unknown> = { student_id: user.id, ...updateData }
+    for (let i = 0; i < 12; i++) {
+      const { data: inserted, error } = await db.from('employment_tracking').insert(data).select('id').single()
+      if (!error && inserted) {
+        writeAuditLog(c, 'update_employment_status', `student:${user.id}`)
+        return ok(c, { id: (inserted as Row).id })
+      }
+      const msg = error?.message || ''
+      const unknownCol = msg.match(/'(\w+)' column/) || msg.match(/Could not find the '(\w+)' column/)
+      if (unknownCol) {
+        delete data[unknownCol[1]]
+        continue
+      }
+      return err(c, msg || 'Could not save employment status.', 400)
+    }
+  }
+  return err(c, 'Could not save employment status.', 400)
+})
+
+mutations.post('/student/mentoring-tool', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const body = await bodyJson(c)
+  const title = String(body.title || '').trim()
+  const description = String(body.description || '').trim()
+  const fileName = String(body.file_name || '').trim()
+  const b64 = String(body.file_base64 || '').trim()
+  if (!title) return err(c, 'Please provide a title for this upload.', 400)
+  if (!fileName || !b64) return err(c, 'Please select a PDF file to upload.', 400)
+  const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : ''
+  if (ext !== 'pdf') return err(c, 'Only PDF files are accepted.', 400)
+
+  const bytes = decodeBase64Payload(b64)
+  if (!bytes.length) return err(c, 'The selected file is empty.', 400)
+  if (bytes.length > 20 * 1024 * 1024) return err(c, 'File exceeds the 20 MB limit.', 400)
+
+  const storagePath = `mentoring_tools/${user.id}/${crypto.randomUUID().replace(/-/g, '')}_${fileSlug(fileName)}.pdf`
+  await uploadBytes(db, 'assessment-scripts', storagePath, bytes, 'application/pdf')
+  const base = c.env.SUPABASE_URL.replace(/\/$/, '')
+  const fileUrl = `${base}/storage/v1/object/public/assessment-scripts/${storagePath}`
+
+  const { data: attRows } = await db
+    .from('industrial_attachments')
     .select('id')
-    .single()
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const attId = ((attRows ?? []) as Row[])[0]?.id || null
 
-  if (error) return err(c, error.message, 400)
-  return ok(c, { id: (data as Row).id })
+  let payload: Record<string, unknown> = {
+    student_id: user.id,
+    attachment_id: attId,
+    title,
+    description: description || null,
+    file_url: fileUrl,
+    storage_path: storagePath,
+    file_name: fileName,
+    file_size: bytes.length,
+  }
+  for (let i = 0; i < 10; i++) {
+    const { data, error } = await db.from('mentoring_tool_uploads').insert(payload).select('id').single()
+    if (!error && data) {
+      writeAuditLog(c, 'upload_mentoring_tool', `student:${user.id}`)
+      return ok(c, { id: (data as Row).id })
+    }
+    const msg = error?.message || ''
+    const unknownCol = msg.match(/'(\w+)' column/) || msg.match(/Could not find the '(\w+)' column/)
+    if (unknownCol) {
+      delete payload[unknownCol[1]]
+      continue
+    }
+    return err(c, msg || 'Upload failed.', 400)
+  }
+  return err(c, 'Upload failed.', 400)
+})
+
+mutations.post('/student/mentoring-tool/:id/delete', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const id = c.req.param('id')
+  const { data: rows } = await db
+    .from('mentoring_tool_uploads')
+    .select('id, storage_path, title')
+    .eq('id', id)
+    .eq('student_id', user.id)
+    .limit(1)
+  const row = ((rows ?? []) as Row[])[0]
+  if (!row) return err(c, 'Upload not found.', 404)
+  await db.from('mentoring_tool_uploads').delete().eq('id', id)
+  writeAuditLog(c, 'delete_mentoring_tool', `upload:${id}`)
+  return ok(c, { deleted: true, title: row.title })
 })
 
 /* ── Workshop inventory ──────────────────────────────────────────────────── */

@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { PortalShell } from '@/layouts/PortalShell'
 import { ApiTablePage, StatusPill, cell } from '@/pages/shared/ApiTablePage'
-import { InteractiveTablePage } from '@/pages/shared/InteractiveTablePage'
 
 export function StudentAssessmentsPage() {
   return (
@@ -39,59 +38,9 @@ export { default as StudentExamBookingsPage } from '@/pages/student/ExamBookings
 export { default as StudentExamBookingFormPage } from '@/pages/student/ExamBookingNewPage'
 export { default as StudentIndustrialAttachmentPage } from '@/pages/student/IndustrialAttachmentPage'
 export { default as StudentLogbookPage } from '@/pages/student/LogbookPage'
-
-export function StudentAttachmentMarksPage() {
-  return (
-    <ApiTablePage
-      title="My Attachment Marks"
-      endpoint="/student/attachment-marks"
-      rowsKey="items"
-      columns={[
-        { key: 'total_score', label: 'Score' },
-        { key: 'grade', label: 'Grade' },
-        { key: 'created_at', label: 'Recorded' },
-      ]}
-    />
-  )
-}
-
-export function StudentMentoringToolPage() {
-  return (
-    <ApiTablePage
-      title="Mentoring Tool / Logbook"
-      endpoint="/student/mentoring-tool"
-      rowsKey="items"
-      columns={[
-        { key: 'companies.name', label: 'Company', render: (r) => cell(r, 'companies.name') },
-        { key: 'file_name', label: 'File' },
-        { key: 'created_at', label: 'Uploaded' },
-      ]}
-    />
-  )
-}
-
-export function StudentEmploymentStatusPage() {
-  return (
-    <InteractiveTablePage
-      title="Employment Status"
-      endpoint="/student/employment-status"
-      rowsKey="items"
-      columns={[
-        { key: 'employer_name', label: 'Employer' },
-        { key: 'position', label: 'Position' },
-        { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
-        { key: 'start_date', label: 'Start' },
-      ]}
-      createLabel="Add status"
-      createFields={[
-        { name: 'employer_name', label: 'Employer', required: true },
-        { name: 'position', label: 'Position', required: true },
-        { name: 'status', label: 'Status', required: true },
-        { name: 'start_date', label: 'Start date', type: 'date' },
-      ]}
-    />
-  )
-}
+export { default as StudentAttachmentMarksPage } from '@/pages/student/AttachmentMarksPage'
+export { default as StudentMentoringToolPage } from '@/pages/student/MentoringToolPage'
+export { default as StudentEmploymentStatusPage } from '@/pages/student/EmploymentStatusPage'
 
 export function StudentSummativePage() {
   return (

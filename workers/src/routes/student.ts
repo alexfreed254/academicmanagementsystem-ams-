@@ -672,40 +672,88 @@ student.get('/student/logbook', requireRole('student'), async (c) => {
 student.get('/student/attachment-marks', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
-  const { data: atts } = await db.from('industrial_attachments').select('id').eq('student_id', user.id)
-  const ids = ((atts ?? []) as { id: string }[]).map((a) => a.id)
-  if (!ids.length) return ok(c, { items: [] })
-  const { data } = await db.from('attachment_grades').select('*').in('attachment_id', ids)
-  return ok(c, { items: data ?? [] })
+
+  const { data: attachments } = await db
+    .from('industrial_attachments')
+    .select('id, start_date, end_date, status, companies(name, address, city)')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+
+  const list = (attachments ?? []) as Row[]
+  const attIds = list.map((a) => a.id as string).filter(Boolean)
+  const gradesMap: Record<string, Row> = {}
+  if (attIds.length) {
+    const { data: gradeRows } = await db.from('attachment_grades').select('*').in('attachment_id', attIds)
+    for (const g of (gradeRows ?? []) as Row[]) {
+      gradesMap[String(g.attachment_id)] = g
+    }
+  }
+
+  const enriched = list.map((a) => ({ ...a, _grade: gradesMap[String(a.id)] || null }))
+
+  const config: Record<string, number> = {
+    weight_gps_attendance: 10,
+    weight_logbook: 20,
+    weight_mentor_eval: 30,
+    weight_trainer_assessment: 30,
+    weight_final_report: 10,
+  }
+  try {
+    const { data: cfgRows } = await db.from('attachment_grading_config').select('*').eq('is_active', true).limit(1)
+    const cfg = ((cfgRows ?? []) as Row[])[0]
+    if (cfg) {
+      for (const [k, v] of Object.entries(cfg)) {
+        if (k.startsWith('weight_') && typeof v === 'number') config[k] = v
+      }
+    }
+  } catch {
+    /* optional table */
+  }
+
+  return ok(c, {
+    items: enriched,
+    attachments: enriched,
+    config,
+  })
 })
 
 student.get('/student/mentoring-tool', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
-  const { data: atts } = await db
-    .from('industrial_attachments')
-    .select('company_id')
-    .eq('student_id', user.id)
-  const companyIds = [
-    ...new Set(((atts ?? []) as { company_id?: string }[]).map((a) => a.company_id).filter(Boolean)),
-  ] as string[]
-  if (!companyIds.length) return ok(c, { items: [] })
   const { data } = await db
     .from('mentoring_tool_uploads')
-    .select('*, companies(name)')
-    .in('company_id', companyIds)
-  return ok(c, { items: data ?? [] })
+    .select('*')
+    .eq('student_id', user.id)
+    .order('uploaded_at', { ascending: false })
+  return ok(c, { items: data ?? [], uploads: data ?? [] })
 })
 
 student.get('/student/employment-status', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
-  const { data } = await db
-    .from('employment_status')
-    .select('*')
-    .eq('student_id', user.id)
-    .order('created_at', { ascending: false })
-  return ok(c, { items: data ?? [] })
+  let currentStatus: Row | null = null
+  let projects: Row[] = []
+  try {
+    const { data } = await db.from('employment_tracking').select('*').eq('student_id', user.id).limit(1)
+    currentStatus = ((data ?? []) as Row[])[0] || null
+  } catch {
+    /* optional */
+  }
+  try {
+    const { data } = await db
+      .from('employment_projects')
+      .select('*')
+      .eq('student_id', user.id)
+      .order('created_at', { ascending: false })
+    projects = (data ?? []) as Row[]
+  } catch {
+    /* optional */
+  }
+  return ok(c, {
+    items: currentStatus ? [currentStatus] : [],
+    current_status: currentStatus,
+    projects,
+  })
 })
 
 student.get('/student/portfolio', requireRole('student'), async (c) => {
