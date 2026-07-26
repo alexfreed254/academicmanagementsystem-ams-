@@ -1,36 +1,25 @@
-# TTTI AMS — single Cloudflare project
+# TTTI AMS — Cloudflare Worker (edge proxy to Flask)
 #
 # SOURCE OF TRUTH
-#   Design / UI   → templates/   (Jinja, served by Flask in the Container)
-#   Functionality → routes/      (Flask blueprints in the Container)
+#   Design / UI   → templates/   (Jinja on Flask/Render)
+#   Functionality → routes/      (Flask blueprints on Flask/Render)
 #
-# Secrets (never commit): SECRET_KEY, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
-#   → Cloudflare Dashboard → Worker → Settings → Variables and Secrets
-#   or: npx wrangler secret put <NAME>
+# Containers are DISABLED here because Cloudflare CI fails with
+# `Unauthorized` when pushing images unless Workers Paid + Containers are active.
+# Dockerfile remains in the repo for a later Containers cutover.
+#
+# Required dashboard variable (plain text):
+#   FLASK_ORIGIN = https://<your-render-service>.onrender.com
+#
+# Flask secrets stay on Render (SECRET_KEY, SUPABASE_*). Do not put them here.
 
 name = "academic-management-system-254"
 main = "src/index.ts"
 compatibility_date = "2026-07-26"
 compatibility_flags = ["nodejs_compat"]
 
-# Match dashboard so CI deploy does not flip these off
 workers_dev = true
 preview_urls = true
-
-# Flask container = full app (routes/ + templates/ + static/)
-[[containers]]
-class_name = "FlaskContainer"
-image = "./Dockerfile"
-max_instances = 3
-instance_type = "basic"
-
-[[durable_objects.bindings]]
-name = "FLASK_CONTAINER"
-class_name = "FlaskContainer"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["FlaskContainer"]
 
 [observability]
 enabled = false
@@ -50,11 +39,21 @@ head_sampling_rate = 1
 [vars]
 FLASK_ENV = "production"
 SPA_CROSS_SITE = "false"
-# Non-secret project URL (keep in sync with dashboard so deploy does not wipe it)
-SUPABASE_URL = "https://kbxaawuxlycetxifltxf.supabase.co"
-# After first successful deploy, set this to your real workers.dev hostname, e.g.
-# SPA_ORIGINS = "https://academic-management-system-254.<account-subdomain>.workers.dev"
-SPA_ORIGINS = ""
+# Set in Dashboard if empty — must be your live gunicorn URL (no trailing slash):
+# FLASK_ORIGIN = "https://thika-technical-training-institute-ams.onrender.com"
+FLASK_ORIGIN = ""
 
-# Optional custom domain after DNS is on Cloudflare:
-# routes = [{ pattern = "ams.yourdomain.ac.ke", custom_domain = true }]
+# --- Re-enable when Workers Paid can push to the container registry ---
+# [[containers]]
+# class_name = "FlaskContainer"
+# image = "./Dockerfile"
+# max_instances = 3
+# instance_type = "basic"
+#
+# [[durable_objects.bindings]]
+# name = "FLASK_CONTAINER"
+# class_name = "FlaskContainer"
+#
+# [[migrations]]
+# tag = "v1"
+# new_sqlite_classes = ["FlaskContainer"]

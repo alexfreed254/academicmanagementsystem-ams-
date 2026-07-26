@@ -172,35 +172,36 @@ Same Worker hostname for Jinja portals + `/api` ⇒ **same-origin**.
 
 ## 6. CI failure: `✘ [ERROR] Unauthorized` after Docker build
 
-This means the **Worker script uploaded**, the **Dockerfile built**, but pushing the
-image to **Cloudflare’s container registry** was rejected.
+**What happened:** Worker script upload OK → Dockerfile build OK → **push to
+Cloudflare container registry rejected** (`Unauthorized`).
 
-Checklist (in order):
+**Cause:** Cloudflare Containers need a **Workers Paid** plan (and Containers
+enabled on the account). This is not a bug in `templates/` or `routes/`.
 
-1. **Workers Paid plan** — Containers are not available on the free Workers plan.
-   Dashboard → Workers & Pages → Plans → upgrade if needed.
-2. **Containers enabled** for the account — open
-   [Containers docs](https://developers.cloudflare.com/containers/) and confirm
-   your account can create a container application.
-3. **Secrets still set** after deploy — `wrangler deploy` overwrites plain `[vars]`
-   from `wrangler.toml`. Keep these as **Secrets** (not Build variables):
-   - `SECRET_KEY`
-   - `SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - optional: `BIOMETRIC_DEVICE_SECRET`
-4. **Dashboard → Worker → Settings → Variables** — after a green deploy, set
-   `SPA_ORIGINS` to your real `*.workers.dev` URL (comma-separated if several).
-5. If Paid is active and Unauthorized persists, it can be a Cloudflare registry
-   auth bug — retry deploy, or open a ticket with the build log timestamp
-   ([workers-sdk#9898](https://github.com/cloudflare/workers-sdk/issues/9898)).
+**Current workaround (in this repo):** Containers are **disabled** in
+`wrangler.toml`. The Worker proxies all traffic to **`FLASK_ORIGIN`** (your
+existing Render Flask/gunicorn URL). Design + functionality still come from
+`templates/` + `routes/` on Render.
 
-Required secrets (once, from a machine with Wrangler logged in):
+### After the next deploy succeeds
 
-```bash
-npx wrangler secret put SECRET_KEY
-npx wrangler secret put SUPABASE_ANON_KEY
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-```
+1. Cloudflare Dashboard → Workers → `academic-management-system-254` → **Settings → Variables**
+2. Set **FLASK_ORIGIN** = your Render URL, e.g.  
+   `https://thika-technical-training-institute-ams.onrender.com`  
+   (no trailing slash)
+3. Keep Flask secrets (`SECRET_KEY`, `SUPABASE_*`) on **Render**, not in the Worker
+
+### When you upgrade to Workers Paid
+
+1. Uncomment the `[[containers]]` / Durable Object blocks in `wrangler.toml`
+2. Restore `src/index.ts` Container proxy (see git history / `Dockerfile`)
+3. Re-add `@cloudflare/containers` and redeploy
+
+Checklist if you still want Containers now:
+
+1. Workers & Pages → Plans → **Workers Paid**
+2. Confirm Containers are available for the account
+3. Secrets on the Worker only matter once Flask runs *inside* the Container
 
 ---
 
