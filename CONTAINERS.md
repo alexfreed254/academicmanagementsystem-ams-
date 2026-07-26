@@ -80,7 +80,7 @@ Edit `wrangler.toml` `[vars].SPA_ORIGINS` to your final Worker/custom domain
 SPA_ORIGINS = "https://academic-management-system-254.<ACCOUNT_SUBDOMAIN>.workers.dev"
 ```
 
-### D. Local build & test (Docker required)
+### C. Local build & test (Docker required)
 
 ```bash
 # Optional: smoke-test the image alone
@@ -94,8 +94,7 @@ docker run --rm -p 8080:8080 ^
   ttti-flask:local
 # Then: curl http://127.0.0.1:8080/api/v1/csrf-token
 
-# Full Worker + container locally (Wrangler builds/pushes image as needed)
-npm run build:frontend
+# Full Worker + container locally (Wrangler builds the image)
 npx wrangler dev
 ```
 
