@@ -1,10 +1,10 @@
 /**
  * Cloudflare Workers Builds / local deploy:
- * 1) Install + build React SPA → frontend/dist
- * 2) wrangler deploy (serves SPA Assets + Hono /api)
+ * 1) Install Worker deps at repo root (hono, supabase, …)
+ * 2) Install + build React SPA → frontend/dist
+ * 3) wrangler deploy (SPA Assets + Hono /api)
  *
  * Dashboard Deploy command MUST be: npm run deploy
- * (plain `npx wrangler deploy` fails — frontend/dist does not exist yet)
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const frontend = join(root, 'frontend')
+const workers = join(root, 'workers')
 
 function run(cmd, args, cwd = root) {
   console.log(`\n> ${cmd} ${args.join(' ')}  (cwd: ${cwd})`)
@@ -22,19 +23,32 @@ function run(cmd, args, cwd = root) {
   }
 }
 
+function npmInstall(cwd) {
+  const lock = join(cwd, 'package-lock.json')
+  if (existsSync(lock)) {
+    run('npm', ['ci', '--no-fund', '--no-audit'], cwd)
+  } else {
+    run('npm', ['install', '--no-fund', '--no-audit'], cwd)
+  }
+}
+
+// Root deps: hono / supabase / zod / scrypt-js (wrangler bundles from repo root)
+console.log('\nInstalling Worker API dependencies (repo root)...')
+npmInstall(root)
+
+// Also install workers/ so local `cd workers && wrangler` keeps working
+if (existsSync(join(workers, 'package.json'))) {
+  console.log('\nInstalling workers/ package dependencies...')
+  npmInstall(workers)
+}
+
 if (!existsSync(join(frontend, 'package.json'))) {
   console.error('frontend/package.json not found')
   process.exit(1)
 }
 
-// Prefer npm ci when lockfile exists; fall back to install (CI / bun environments)
-const lock = join(frontend, 'package-lock.json')
-if (existsSync(lock)) {
-  run('npm', ['ci', '--no-fund', '--no-audit'], frontend)
-} else {
-  run('npm', ['install', '--no-fund', '--no-audit'], frontend)
-}
-
+console.log('\nBuilding React SPA...')
+npmInstall(frontend)
 run('npm', ['run', 'build'], frontend)
 
 const distIndex = join(frontend, 'dist', 'index.html')

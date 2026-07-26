@@ -7,19 +7,11 @@ The Worker serves **both** the React UI and the Hono API:
 /api/*    → Hono API
 ```
 
-## Why the last deploy failed
+## Why the last deploy failed (missing `hono`, etc.)
 
-Deploy command was:
+Cloudflare runs `bun install` at the **repo root**. Worker libraries (`hono`, `@supabase/supabase-js`, `zod`, `scrypt-js`) must be listed in the **root** `package.json`, not only under `workers/`.
 
-```text
-npx wrangler deploy
-```
-
-That skips the React build, so Wrangler errors:
-
-```text
-assets.directory … frontend/dist does not exist
-```
+`npm run deploy` now installs those deps, builds the SPA, then runs `wrangler deploy`.
 
 ## Fix in Cloudflare Dashboard
 
