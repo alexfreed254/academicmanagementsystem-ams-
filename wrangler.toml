@@ -4,13 +4,18 @@
 #   Design / UI   → templates/   (Jinja, served by Flask in the Container)
 #   Functionality → routes/      (Flask blueprints in the Container)
 #
-# No Worker Assets / frontend/dist required — Cloudflare CI only needs
-# `npx wrangler deploy` (Flask UI is inside the Container image).
+# Secrets (never commit): SECRET_KEY, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+#   → Cloudflare Dashboard → Worker → Settings → Variables and Secrets
+#   or: npx wrangler secret put <NAME>
 
 name = "academic-management-system-254"
 main = "src/index.ts"
-compatibility_date = "2026-07-12"
+compatibility_date = "2026-07-26"
 compatibility_flags = ["nodejs_compat"]
+
+# Match dashboard so CI deploy does not flip these off
+workers_dev = true
+preview_urls = true
 
 # Flask container = full app (routes/ + templates/ + static/)
 [[containers]]
@@ -44,8 +49,12 @@ head_sampling_rate = 1
 
 [vars]
 FLASK_ENV = "production"
-SPA_ORIGINS = "https://academic-management-system-254.<your-subdomain>.workers.dev"
 SPA_CROSS_SITE = "false"
+# Non-secret project URL (keep in sync with dashboard so deploy does not wipe it)
+SUPABASE_URL = "https://kbxaawuxlycetxifltxf.supabase.co"
+# After first successful deploy, set this to your real workers.dev hostname, e.g.
+# SPA_ORIGINS = "https://academic-management-system-254.<account-subdomain>.workers.dev"
+SPA_ORIGINS = ""
 
 # Optional custom domain after DNS is on Cloudflare:
 # routes = [{ pattern = "ams.yourdomain.ac.ke", custom_domain = true }]

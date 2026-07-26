@@ -170,7 +170,41 @@ Same Worker hostname for Jinja portals + `/api` ⇒ **same-origin**.
 
 ---
 
-## 6. Rollback
+## 6. CI failure: `✘ [ERROR] Unauthorized` after Docker build
+
+This means the **Worker script uploaded**, the **Dockerfile built**, but pushing the
+image to **Cloudflare’s container registry** was rejected.
+
+Checklist (in order):
+
+1. **Workers Paid plan** — Containers are not available on the free Workers plan.
+   Dashboard → Workers & Pages → Plans → upgrade if needed.
+2. **Containers enabled** for the account — open
+   [Containers docs](https://developers.cloudflare.com/containers/) and confirm
+   your account can create a container application.
+3. **Secrets still set** after deploy — `wrangler deploy` overwrites plain `[vars]`
+   from `wrangler.toml`. Keep these as **Secrets** (not Build variables):
+   - `SECRET_KEY`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - optional: `BIOMETRIC_DEVICE_SECRET`
+4. **Dashboard → Worker → Settings → Variables** — after a green deploy, set
+   `SPA_ORIGINS` to your real `*.workers.dev` URL (comma-separated if several).
+5. If Paid is active and Unauthorized persists, it can be a Cloudflare registry
+   auth bug — retry deploy, or open a ticket with the build log timestamp
+   ([workers-sdk#9898](https://github.com/cloudflare/workers-sdk/issues/9898)).
+
+Required secrets (once, from a machine with Wrangler logged in):
+
+```bash
+npx wrangler secret put SECRET_KEY
+npx wrangler secret put SUPABASE_ANON_KEY
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+```
+
+---
+
+## 7. Rollback
 
 ```bash
 npx wrangler deployments list
@@ -181,7 +215,7 @@ Render/Flask remains untouched until you point DNS at the Worker.
 
 ---
 
-## 7. Related docs
+## 8. Related docs
 
 - `MIGRATION_INVENTORY.md` — full Flask surface & blockers  
 - `DEPLOYMENT.md` — earlier Pages + Hono Workers path (optional alternative)  
