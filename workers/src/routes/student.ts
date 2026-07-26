@@ -478,12 +478,113 @@ student.get('/student/summative', requireRole('student'), async (c) => {
 student.get('/student/exam-booking-form', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
-  const { data } = await db
-    .from('units')
-    .select('id, name, code')
-    .limit(100)
-  return ok(c, { items: data ?? [], student_id: user.id })
+
+  const { data: student } = await db.from('user_profiles').select('*').eq('id', user.id).maybeSingle()
+
+  const { data: enrollmentRows } = await db
+    .from('enrollments')
+    .select('*, classes(id, name, course_id)')
+    .eq('student_id', user.id)
+    .limit(1)
+
+  const enrollment = ((enrollmentRows ?? []) as Row[])[0] || null
+  const classData = (enrollment?.classes as Row | null) || null
+  const classId = (enrollment?.class_id as string | undefined) || (classData?.id as string | undefined) || null
+
+  let courseName = ''
+  let departmentName = ''
+  if (classData?.course_id) {
+    const { data: course } = await db
+      .from('courses')
+      .select('*, departments(name)')
+      .eq('id', classData.course_id as string)
+      .maybeSingle()
+    courseName = String((course as Row | null)?.name || '')
+    departmentName = String(((course as Row | null)?.departments as Row | null)?.name || '')
+  }
+
+  const units: Row[] = []
+  const marksByUnit: Record<string, Row> = {}
+  if (classId) {
+    const { data: cuRows } = await db
+      .from('class_units')
+      .select('*, units(id, name, code, unit_cost)')
+      .eq('class_id', classId)
+    for (const row of (cuRows ?? []) as Row[]) {
+      const unit = { ...((row.units as Row) || {}) }
+      unit.inferred_type = inferUnitTypeFromCode(String(unit.code || ''))
+      units.push({ ...row, units: unit })
+    }
+    const unitIds = units
+      .map((u) => ((u.units as Row | null)?.id as string | undefined))
+      .filter(Boolean) as string[]
+    if (unitIds.length) {
+      const { data: allMarks } = await db
+        .from('marks')
+        .select('id, unit_id, grade, marks_obtained, term, year')
+        .eq('student_id', user.id)
+        .in('unit_id', unitIds)
+        .order('year', { ascending: false })
+        .order('created_at', { ascending: false })
+      for (const m of (allMarks ?? []) as Row[]) {
+        const uid = String(m.unit_id || '')
+        if (uid && !marksByUnit[uid]) marksByUnit[uid] = m
+      }
+    }
+  }
+
+  const { data: documentsData } = await db
+    .from('student_personal_documents')
+    .select('*')
+    .eq('student_id', user.id)
+  const documents: Record<string, Row> = {}
+  for (const doc of (documentsData ?? []) as Row[]) {
+    documents[String(doc.document_type || '')] = doc
+  }
+  const requiredDocs = ['national_id', 'birth_certificate', 'kcse_certificate', 'passport_photo']
+  const missingDocuments = requiredDocs.some((k) => !documents[k])
+  const canDownload = !missingDocuments && units.length > 0
+
+  const { data: existingBookings } = await db
+    .from('exam_bookings')
+    .select('*, units(name, code), user_profiles!exam_bookings_approved_by_fkey(full_name)')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  return ok(c, {
+    student: student ?? {},
+    course_name: courseName,
+    department_name: departmentName,
+    class_id: classId,
+    units,
+    marks_by_unit: marksByUnit,
+    documents,
+    missing_documents: missingDocuments,
+    can_download: canDownload,
+    existing_bookings: existingBookings ?? [],
+    // legacy key used by older SPA stub
+    items: units.map((u) => u.units).filter(Boolean),
+  })
 })
+
+function inferUnitTypeFromCode(code: string): string {
+  const raw = String(code || '')
+    .trim()
+    .toUpperCase()
+  if (!raw) return 'Core'
+  const normalized = raw.replace(/[^A-Z0-9]+/g, '/').replace(/^\/+|\/+$/g, '')
+  if (/(^|\/)CC(\/|$|\d)/.test(normalized)) return 'Common'
+  if (/(^|\/)BC(\/|$|\d)/.test(normalized)) return 'Basic'
+  if (/(^|\/)CR(\/|$|\d)/.test(normalized)) return 'Core'
+  const parts = normalized.split('/').filter(Boolean)
+  for (const part of parts) {
+    if (part === 'CC' || part === 'COMMON') return 'Common'
+    if (part === 'BC' || part === 'BASIC') return 'Basic'
+    if (part === 'CR' || part === 'CORE') return 'Core'
+  }
+  return 'Core'
+}
 
 student.get('/student/upload-assessment-form', requireRole('student'), async (c) => {
   const user = c.get('user')

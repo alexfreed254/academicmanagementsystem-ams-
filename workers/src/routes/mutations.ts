@@ -198,13 +198,21 @@ mutations.post('/student/exam-bookings', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
   const body = await bodyJson(c)
-  const unitId = String(body.unit_id || '').trim()
-  const examDate = String(body.exam_date || '').trim()
-  const examSession = String(body.exam_session || 'morning').trim()
-  const year = Number(body.year) || new Date().getFullYear()
-  const term = Number(body.term) || 1
 
-  if (!unitId || !examDate) return err(c, 'Unit and exam date are required.', 400)
+  // Form 1A multi-unit submit (mirrors Flask exam_booking_submit)
+  const selectedUnits = Array.isArray(body.selected_units)
+    ? (body.selected_units as unknown[]).map((u) => String(u).trim()).filter(Boolean)
+    : body.unit_id
+      ? [String(body.unit_id).trim()]
+      : []
+
+  if (!selectedUnits.length) return err(c, 'Please select at least one unit of competency.', 400)
+
+  const year = Number(body.exam_year || body.year) || new Date().getFullYear()
+  const series = Number(body.exam_series || 1) || 1
+  const term = Number(body.term) || 1
+  const moduleLevel = String(body.module_level || '').trim()
+  const serialNumber = `TTTI-${year}-EXAM-${String(Math.floor(Math.random() * 1e6)).padStart(6, '0')}`
 
   const { data: enrollment } = await db
     .from('enrollments')
@@ -212,26 +220,91 @@ mutations.post('/student/exam-bookings', requireRole('student'), async (c) => {
     .eq('student_id', user.id)
     .limit(1)
     .maybeSingle()
+  const classId = (enrollment as Row | null)?.class_id ?? null
 
-  const { data, error } = await db
-    .from('exam_bookings')
-    .insert({
+  const attempts = (body.attempt_types as Record<string, string> | undefined) || {}
+  const costs = (body.unit_costs as Record<string, string> | undefined) || {}
+  const types = (body.unit_types as Record<string, string> | undefined) || {}
+
+  const createdIds: string[] = []
+  for (const unitId of selectedUnits) {
+    const { data: unit } = await db.from('units').select('id, name, code').eq('id', unitId).maybeSingle()
+    if (!unit) continue
+    const unitType =
+      ['Core', 'Common', 'Basic'].includes(String(types[unitId] || ''))
+        ? String(types[unitId])
+        : inferUnitTypeFromCode(String((unit as Row).code || ''))
+    const attempt = String(attempts[unitId] || 'first_attempt')
+    const costRaw = costs[unitId]
+    const payload: Record<string, unknown> = {
       student_id: user.id,
       unit_id: unitId,
-      class_id: (enrollment as Row | null)?.class_id ?? null,
-      exam_date: examDate,
-      exam_session: examSession,
+      class_id: classId,
+      exam_date: String(body.exam_date || new Date().toISOString().slice(0, 10)),
+      exam_year: year,
+      exam_series_no: series,
+      exam_term: term,
       year,
       term,
+      exam_session: SERIES_LABEL[series] || String(body.exam_session || 'MARCH'),
+      purpose: `${unitType} — ${moduleLevel}`.slice(0, 200),
+      attempt_type: attempt,
+      serial_number: serialNumber,
       status: 'pending',
-    })
-    .select('id')
-    .single()
+    }
+    if (costRaw !== undefined && costRaw !== '') {
+      const n = Number(costRaw)
+      if (!Number.isNaN(n)) payload.unit_cost = n
+    }
 
-  if (error) return err(c, error.message, 400)
-  writeAuditLog(c, 'create_exam_booking', `booking:${(data as Row).id}`)
-  return ok(c, { booking_id: (data as Row).id })
+    // Insert with graceful column stripping for schema drift (mirrors Flask)
+    let data = { ...payload }
+    let inserted = false
+    for (let i = 0; i < 15 && !inserted; i++) {
+      const { data: row, error } = await db.from('exam_bookings').insert(data).select('id').single()
+      if (!error && row) {
+        createdIds.push(String((row as Row).id))
+        inserted = true
+        break
+      }
+      const msg = error?.message || ''
+      const unknownCol = msg.match(/'(\w+)' column/) || msg.match(/Could not find the '(\w+)' column/)
+      if (unknownCol) {
+        delete data[unknownCol[1]]
+        continue
+      }
+      // Duplicate → upsert-ish reset to pending
+      if (/duplicate|23505/i.test(msg)) {
+        await db
+          .from('exam_bookings')
+          .update({ status: 'pending', serial_number: serialNumber })
+          .eq('student_id', user.id)
+          .eq('unit_id', unitId)
+        inserted = true
+        break
+      }
+      return err(c, msg || 'Could not create exam booking.', 400)
+    }
+  }
+
+  if (!createdIds.length) return err(c, 'Could not create exam booking.', 400)
+  writeAuditLog(c, 'create_exam_booking', `booking:${serialNumber}`)
+  return ok(c, { booking_ids: createdIds, serial_number: serialNumber, submitted: true })
 })
+
+const SERIES_LABEL: Record<number, string> = { 1: 'MARCH', 2: 'JULY', 3: 'NOVEMBER' }
+
+function inferUnitTypeFromCode(code: string): string {
+  const raw = String(code || '')
+    .trim()
+    .toUpperCase()
+  if (!raw) return 'Core'
+  const normalized = raw.replace(/[^A-Z0-9]+/g, '/').replace(/^\/+|\/+$/g, '')
+  if (/(^|\/)CC(\/|$|\d)/.test(normalized)) return 'Common'
+  if (/(^|\/)BC(\/|$|\d)/.test(normalized)) return 'Basic'
+  if (/(^|\/)CR(\/|$|\d)/.test(normalized)) return 'Core'
+  return 'Core'
+}
 
 mutations.post('/dept-admin/exam-bookings/:id/approve', requireRole('dept_admin'), async (c) => {
   const user = c.get('user')
