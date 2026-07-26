@@ -62,6 +62,12 @@ enforces RBAC + department isolation in TypeScript (same model as Flask).
 
 ## 3. Cloudflare Workers setup (API)
 
+**Git-connected Builds** deploy the **repo root** `wrangler.toml`, which points at
+`workers/src/index.ts` (Hono). No Docker / Containers in that path.
+
+Standalone Workers project (`workers/wrangler.toml`, name `ttti-ams-api`) remains
+available via GitHub Action `deploy-workers.yml` or `cd workers && npx wrangler deploy`.
+
 ```bash
 cd workers
 npm install

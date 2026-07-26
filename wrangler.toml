@@ -1,36 +1,29 @@
-# TTTI AMS — single Cloudflare project
+# TTTI AMS — Cloudflare Workers Builds (root deploy)
 #
-# SOURCE OF TRUTH
-#   Design / UI   → templates/   (Jinja, served by Flask in the Container)
-#   Functionality → routes/      (Flask blueprints in the Container)
+# Cloudflare Git integration runs `npx wrangler deploy` at the repo root.
+# Cutover architecture: Hono API here → Pages SPA (frontend/) → Supabase.
+# Flask Containers are NOT deployed from this file (registry Unauthorized without
+# Workers Paid). Optional Containers config: wrangler.containers.toml
 #
-# Secrets (never commit): SECRET_KEY, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
-#   → Cloudflare Dashboard → Worker → Settings → Variables and Secrets
-#   or: npx wrangler secret put <NAME>
+# Secrets (Dashboard or wrangler secret put):
+#   SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 
 name = "academic-management-system-254"
-main = "src/index.ts"
+main = "workers/src/index.ts"
 compatibility_date = "2026-07-26"
 compatibility_flags = ["nodejs_compat"]
 
-# Match dashboard so CI deploy does not flip these off
 workers_dev = true
 preview_urls = true
 
-# Flask container = full app (routes/ + templates/ + static/)
-[[containers]]
-class_name = "FlaskContainer"
-image = "./Dockerfile"
-max_instances = 3
-instance_type = "basic"
-
-[[durable_objects.bindings]]
-name = "FLASK_CONTAINER"
-class_name = "FlaskContainer"
-
+# Drop Flask Container DO registered by earlier deploys (v1 migration below).
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["FlaskContainer"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["FlaskContainer"]
 
 [observability]
 enabled = false
@@ -48,13 +41,9 @@ persist = true
 head_sampling_rate = 1
 
 [vars]
-FLASK_ENV = "production"
-SPA_CROSS_SITE = "false"
-# Non-secret project URL (keep in sync with dashboard so deploy does not wipe it)
 SUPABASE_URL = "https://kbxaawuxlycetxifltxf.supabase.co"
-# After first successful deploy, set this to your real workers.dev hostname, e.g.
-# SPA_ORIGINS = "https://academic-management-system-254.<account-subdomain>.workers.dev"
-SPA_ORIGINS = ""
+ALLOWED_ORIGINS = "http://localhost:5173,https://ttti-ams.pages.dev"
+ENVIRONMENT = "production"
 
 # Optional custom domain after DNS is on Cloudflare:
-# routes = [{ pattern = "ams.yourdomain.ac.ke", custom_domain = true }]
+# routes = [{ pattern = "api.yourdomain.ac.ke", custom_domain = true }]

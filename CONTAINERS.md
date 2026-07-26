@@ -1,9 +1,9 @@
 # Cloudflare Workers + Containers (Flask) — TTTI AMS
 
-> **Legacy / alternate path.** The approved cutover architecture is
-> **Cloudflare Pages (React) + Workers Hono API** — see `DEPLOYMENT.md` and
-> `MIGRATION_INVENTORY.md`. Use Containers only if you intentionally run
-> unmodified Flask inside Cloudflare instead of the Hono port.
+> **Legacy / alternate path.** Default Cloudflare Git deploy uses root
+> `wrangler.toml` → **Hono** (`workers/src`) — no Docker push.
+> Use this Containers path only with Workers Paid:
+> `npx wrangler deploy -c wrangler.containers.toml`
 
 ## Source of truth
 
@@ -167,83 +167,25 @@ Same Worker hostname for Jinja portals + `/api` ⇒ **same-origin**.
 
 ## 6. CI failure: `✘ [ERROR] Unauthorized` after Docker build
 
-**What happened:** Worker script upload OK → Dockerfile build OK → **push to
-Cloudflare’s container registry rejected** (`Unauthorized`).
+**Cause:** Root Cloudflare Builds was deploying **Containers** (`[[containers]]` +
+Dockerfile). Image build succeeded; registry push returned `Unauthorized`
+(Workers Paid / Containers permissions).
 
-This is almost always **account plan or token/registry auth** — not a bug in
-`templates/`, `routes/`, `Dockerfile`, or the Container binding. Stay on Cloudflare
-and fix auth as below.
+**Fix (in repo):** Root `wrangler.toml` now deploys the **Hono API**
+(`workers/src/index.ts`) with **no Containers**. Redeploy should succeed without
+Docker push.
 
-### A. Workers Paid (most common root cause)
-
-Containers require **Workers Paid**. Free accounts often get a bare `Unauthorized`
-(or opaque 403) with no “upgrade your plan” hint after the image builds.
-
-1. Dashboard → **Workers & Pages → Plans** → upgrade to **Workers Paid**
-2. Open **Workers & Pages → Containers** — you should see Containers UI, not a waitlist/enable wall
-3. Redeploy
-
-### B. API token permissions (GitHub Actions / CI with `CLOUDFLARE_API_TOKEN`)
-
-Older tokens often omit Containers. Edit or recreate the token:
-
-**My Profile → API Tokens → Edit** (or create from **Edit Cloudflare Workers** template), then ensure:
-
-| Permission | Why |
-|---|---|
-| **Workers Scripts:Edit** | Upload the Worker |
-| **Workers Containers:Edit** (or Account → **Cloudflare Containers** / Containers write) | Push images + manage container apps |
-| **Account Settings:Read** | Resolve account ID during registry push |
-
-Also confirm CI env vars match the **same** account where Containers is enabled:
-
-```
-CLOUDFLARE_ACCOUNT_ID=<account with Containers>
-CLOUDFLARE_API_TOKEN=<token with scopes above>
-```
-
-`Cloudflare Images:Edit` does **not** cover Containers.
-
-### C. Local deploy (clearest errors)
-
+Containers remain available only via:
 ```bash
-npx wrangler logout
-npx wrangler login
-npx wrangler whoami
-npx wrangler containers images list
-npx wrangler deploy
+npx wrangler deploy -c wrangler.containers.toml
 ```
+(after Workers Paid + Containers token scopes).
 
-If `containers images list` fails with Unauthorized, the account/token cannot use the
-registry yet (plan or permissions) — fix that before fighting Dockerfile changes.
+After a green Hono deploy, set Worker secrets on `academic-management-system-254`:
+`SESSION_SECRET`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-> Note: some guides mention `wrangler containers login`. Current Wrangler exposes
-> `containers build|push|images|…` but **not** a separate `containers login`;
-> OAuth from `wrangler login` (or a scoped API token) is the auth path.
-
-### D. Cloudflare Git / dashboard Builds (your log shape)
-
-Logs under `/opt/buildhome/repo` + `npx wrangler deploy` are **Workers Builds**
-(Git integration). Cloudflare usually injects deploy credentials automatically —
-token scoping is less often the issue than **Paid + Containers enabled**.
-
-If Builds keep failing after Paid is on: redeploy from dashboard, or run local
-`wrangler deploy` once to confirm registry push works with your user OAuth.
-
-### E. After a green Containers deploy
-
-Set Worker **secrets** (injected into Flask via `FlaskContainer.envVars`):
-
-```bash
-npx wrangler secret put SECRET_KEY
-npx wrangler secret put SUPABASE_ANON_KEY
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-# optional:
-npx wrangler secret put BIOMETRIC_DEVICE_SECRET
-npx wrangler secret put SETUP_PROFILE_TOKEN
-```
-
-Then set `SPA_ORIGINS` in dashboard/`[vars]` to your real `*.workers.dev` URL.
+Update Pages `VITE_API_BASE_URL` to this Worker’s `*.workers.dev` URL and add that
+origin to `ALLOWED_ORIGINS`.
 
 ---
 

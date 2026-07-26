@@ -1,12 +1,7 @@
 /**
- * TTTI AMS — Cloudflare Worker + Flask Container
- *
- * SOURCE OF TRUTH:
- *   - Design / UI  → templates/   (Jinja)
- *   - Functionality → routes/     (Flask blueprints) + app helpers
- *
- * All HTTP traffic is proxied to the unmodified Flask app in the Container.
- * No Worker Assets / frontend/dist required for deploy.
+ * Legacy Containers entry (Flask Durable Object).
+ * Used only with: npx wrangler deploy -c wrangler.containers.toml
+ * Default root deploy uses workers/src/index.ts (Hono API).
  */
 import { Container, getContainer } from '@cloudflare/containers'
 
@@ -24,10 +19,6 @@ export interface Env {
   SETUP_PROFILE_TOKEN?: string
 }
 
-/**
- * Durable Object that owns the Flask container lifecycle.
- * class_name must match wrangler.toml [[containers]] / durable_objects binding.
- */
 export class FlaskContainer extends Container<Env> {
   defaultPort = 8080
   sleepAfter = '15m'
@@ -51,19 +42,6 @@ export class FlaskContainer extends Container<Env> {
       SETUP_PROFILE_TOKEN: env.SETUP_PROFILE_TOKEN || '',
     }
   }
-
-  override onStart(): void {
-    console.log('[FlaskContainer] started — serving routes/ + templates/')
-  }
-
-  override onStop(params: { exitCode: number; reason: string }): void {
-    console.log('[FlaskContainer] stopped', params)
-  }
-
-  override onError(error: unknown): void {
-    console.error('[FlaskContainer] error', error)
-    throw error
-  }
 }
 
 function forwardToFlask(request: Request, env: Env): Promise<Response> {
@@ -71,37 +49,9 @@ function forwardToFlask(request: Request, env: Env): Promise<Response> {
   return stub.fetch(request)
 }
 
-async function proxyFlask(request: Request, env: Env): Promise<Response> {
-  try {
-    const res = await forwardToFlask(request, env)
-    const url = new URL(request.url)
-    const headers = new Headers(res.headers)
-    if (!headers.has('Access-Control-Allow-Origin')) {
-      headers.set('Access-Control-Allow-Origin', url.origin)
-      headers.set('Access-Control-Allow-Credentials', 'true')
-    }
-    return new Response(res.body, {
-      status: res.status,
-      statusText: res.statusText,
-      headers,
-    })
-  } catch (err) {
-    console.error('[worker] Flask container proxy failed', err)
-    return new Response(
-      '<!DOCTYPE html><html><body><h1>Service starting</h1>' +
-        '<p>The academic system container is cold-starting. Refresh in a few seconds.</p></body></html>',
-      {
-        status: 503,
-        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '5' },
-      },
-    )
-  }
-}
-
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
-
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
@@ -115,8 +65,28 @@ export default {
         },
       })
     }
-
-    // Entire app: Flask routes/ + templates/ + static/ + /api
-    return proxyFlask(request, env)
+    try {
+      const res = await forwardToFlask(request, env)
+      const headers = new Headers(res.headers)
+      if (!headers.has('Access-Control-Allow-Origin')) {
+        headers.set('Access-Control-Allow-Origin', url.origin)
+        headers.set('Access-Control-Allow-Credentials', 'true')
+      }
+      return new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
+      })
+    } catch (err) {
+      console.error('[worker] Flask container proxy failed', err)
+      return new Response(
+        '<!DOCTYPE html><html><body><h1>Service starting</h1>' +
+          '<p>Container cold-start. Refresh shortly.</p></body></html>',
+        {
+          status: 503,
+          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '5' },
+        },
+      )
+    }
   },
 }
