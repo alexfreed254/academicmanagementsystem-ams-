@@ -23,7 +23,7 @@ and the blockers that keep PDFs / biometrics / Jinja portals on a legacy origin 
 
 - Cloudflare account (Workers Paid plan recommended for higher subrequest limits)
 - Supabase project already provisioned with `supabase_schema.sql` + all `*_migration.sql`
-- GitHub repo: `https://github.com/alexfreed254/ACADEMIC-MANAGEMENT-SYSTEM254`
+- GitHub repo: `https://github.com/alexfreed254/academic-management-system-254`
 - Node.js 20+
 - Cloudflare Wrangler CLI (`npm i -g wrangler` optional — CI uses it via the action)
 

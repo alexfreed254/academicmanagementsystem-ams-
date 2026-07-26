@@ -1,18 +1,23 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios'
 
 /**
- * Same-origin by default (Cloudflare Worker Assets + Flask Container).
- * Set VITE_API_BASE_URL only if the API is on a different host.
+ * Pages → Workers architecture (default):
+ *   Authorization: Bearer <session JWT>  (no cookies / CSRF)
+ *
+ * Set VITE_AUTH_MODE=cookie only when talking to legacy Flask session APIs.
  */
 const baseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || ''
+
+/** `bearer` (default) | `cookie` (legacy Flask CSRF session) */
+const authMode = ((import.meta.env.VITE_AUTH_MODE as string | undefined) || 'bearer').toLowerCase()
+const useCookieAuth = authMode === 'cookie'
 
 export const TOKEN_KEY = 'ttti_access_token'
 
 export const api: AxiosInstance = axios.create({
   baseURL,
   timeout: 30000,
-  // Flask /api/v1 uses session cookies + CSRF (unmodified Flask in the container).
-  withCredentials: true,
+  withCredentials: useCookieAuth,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -40,11 +45,12 @@ async function ensureCsrfToken(): Promise<string> {
 }
 
 api.interceptors.request.use(async (config) => {
-  // Optional Bearer (Hono Workers path). Flask ignores unknown Authorization.
   const token = sessionStorage.getItem(TOKEN_KEY)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
+  if (!useCookieAuth) return config
 
   const method = (config.method || 'get').toLowerCase()
   if (['post', 'put', 'patch', 'delete'].includes(method)) {
@@ -97,7 +103,7 @@ export function getApiErrorMessage(error: unknown, fallback = 'Something went wr
   return fallback
 }
 
-/** Absolute URL for leftover Flask-only surfaces when API is not same-origin. */
+/** Absolute URL for leftover Flask-only surfaces (PDF/Excel/biometric). */
 export function legacyHref(path: string): string | null {
   const base = (import.meta.env.VITE_LEGACY_ORIGIN as string | undefined)?.replace(/\/$/, '') || ''
   if (!base) return null

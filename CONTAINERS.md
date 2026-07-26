@@ -1,5 +1,10 @@
 # Cloudflare Workers + Containers (Flask) — TTTI AMS
 
+> **Legacy / alternate path.** The approved cutover architecture is
+> **Cloudflare Pages (React) + Workers Hono API** — see `DEPLOYMENT.md` and
+> `MIGRATION_INVENTORY.md`. Use Containers only if you intentionally run
+> unmodified Flask inside Cloudflare instead of the Hono port.
+
 ## Source of truth
 
 | Concern | Location | Runtime |

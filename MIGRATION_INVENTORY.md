@@ -1,22 +1,24 @@
 # TTTI AMS — Cloudflare Migration Inventory
 
-**Status:** Inventory complete. **Phase 1 in progress** (Workers API scaffold + existing `/api/v1` endpoints + Pages wiring).  
+**Status:** Inventory complete. **Target architecture frozen: Pages + Hono Workers.**  
+**Implementation:** Mid Phase 3–5 in code (~235 Hono handlers + full React AppRouter). Cutover / DNS / Excel / biometric still open.  
 **Date:** 2026-07-26  
-**Architecture decisions (approved by default on proceed):** Pages + separate API Worker · Flask kept for biometric · browser-print PDFs / Flask for Excel.  
-**Rule:** Do not change business rules without documenting. Do not cut over production until parity gates pass.
+**Architecture (approved):** Cloudflare Pages (React) → Workers (Hono Bearer JWT) → Supabase. Flask kept for biometric device API + ReportLab/openpyxl until ported.  
+**Rule:** Do not rewrite blindly. Port from Flask `routes/*.py` into existing `workers/` modules. Do not cut over production until parity gates pass.
 
-Canonical inventory for the Cloudflare migration. Update this file in place when the surface changes. Do not invent parallel inventory docs.
+Canonical inventory for the Cloudflare migration. Update this file in place when the surface changes.
 
-**Source of truth (unchanged by Cloudflare hosting):**
+**Source of truth for the Cloudflare cutover:**
 
 | Concern | Authoritative location |
 |---|---|
-| Design / UI | `templates/` (+ `static/`) |
-| System functionality | `routes/` (+ `app.py`, `auth_utils.py`, `db.py`, …) |
+| SPA UI (target) | `frontend/` (React + Vite + TypeScript) |
+| API (target) | `workers/` (Hono + TypeScript) — see `workers/STRUCTURE.md` |
+| Business rules (reference) | Flask `routes/` + helpers — port endpoint-by-endpoint; do not invent new rules |
+| Design reference | `templates/` (+ `static/`) — visual parity guide for React pages |
+| Legacy host (optional) | Root `Dockerfile` / Containers — **not** the cutover path |
 
-Cloudflare Containers run this Flask app unmodified. React under `frontend/` is optional (`/spa`), not a silent replacement of Jinja portals.
-
-Sources inspected: `app.py`, all `routes/*.py`, `auth_utils.py`, `db.py`, `security_utils.py`, `notifications.py`, PDF/Excel helpers, `supabase_schema.sql` + `*_migration.sql`, `frontend/` SPA, `README.md`, `SYSTEM_DOCUMENTATION.md`, `render.yaml`.
+Sources inspected: `app.py`, all `routes/*.py`, `auth_utils.py`, `db.py`, helpers, `supabase_schema.sql` + `*_migration.sql`, `workers/`, `frontend/`, `DEPLOYMENT.md`, `render.yaml`.
 
 ---
 
@@ -24,14 +26,16 @@ Sources inspected: `app.py`, all `routes/*.py`, `auth_utils.py`, `db.py`, `secur
 
 | Fact | Detail |
 |---|---|
-| **Current production stack** | Flask + Gunicorn on **Render** (`render.yaml`, `Procfile`) |
-| **Database / Auth / Storage** | Supabase (unchanged; remains in target architecture) |
-| **UI** | Dual: **Jinja2 portals** (~209 HTML templates) + **partial React SPA** (`frontend/`) |
-| **SPA API** | Flask `routes/api_v1.py` — **18** JSON endpoints under `/api/v1` |
-| **Prior Workers/Pages code** | Present in git history (`workers/`, root `wrangler.jsonc`, expanded SPA) but **absent from the working tree** |
-| **Inventory purpose** | Describe the **working Flask system** that must be preserved; define the Cloudflare target and phased port |
+| **Current production stack** | Flask + Gunicorn on **Render** (`render.yaml`) until DNS cutover |
+| **Database / Auth / Storage** | Supabase (unchanged) |
+| **Cutover UI** | React SPA `frontend/` (~229 AppRouter routes, multi-role) → **Cloudflare Pages** (`ttti-ams`) |
+| **Cutover API** | Hono `workers/` (~235 `/api/v1` handlers) → Worker **`ttti-ams-api`** |
+| **Auth model (SPA)** | `Authorization: Bearer <session JWT>` signed with `SESSION_SECRET` (default `VITE_AUTH_MODE=bearer`) |
+| **Flask SPA JSON** | `routes/api_v1.py` — **18** endpoints (superseded by Workers for Pages) |
+| **Flask HTML** | ~326 handlers / ~209 templates — reference + legacy PDF/Excel/biometric host |
+| **Root Containers** | Optional alternate (`CONTAINERS.md`); **not** required for Pages+Hono cutover |
 
-**Critical migration rule:** Preserve all working features. Port business logic endpoint-by-endpoint. Do not rewrite blindly. Do not cut over production until parity gates pass.
+**Critical migration rule:** Preserve all working features. Port business logic endpoint-by-endpoint into existing Workers routes. Do not rewrite blindly. Do not cut over production until parity gates pass.
 
 ---
 
@@ -579,18 +583,33 @@ Choose one before coding; document the choice in `DEPLOYMENT.md` (to be written 
 
 ---
 
-## 23. Phase 1–2 status (current)
+## 23. Implementation status (current)
 
 | Deliverable | Status |
 |---|---|
-| **Root Cloudflare Containers layout** | `Dockerfile` + `wrangler.toml` + `src/index.ts` — React Assets + Flask Container, one Worker |
-| Deploy guide | `CONTAINERS.md` (CLI order, CORS, limitations) |
-| `workers/` Hono API | Optional alternate path (still in repo) |
-| Bearer session JWT (`SESSION_SECRET`) | Hono path only |
-| **Jinja `templates/` → React `frontend/src/pages/`** | **Done** |
-| Frontend same-origin Flask cookies + CSRF | Done (for Containers layout) |
-| Flask Jinja templates on disk | Kept inside Docker image for Flask HTML/static if proxied |
+| Topology: **Pages + Hono Worker** | **Frozen** — `DEPLOYMENT.md`, CI workflows |
+| `workers/` layout (`app.ts`, middleware auth/rbac, services/) | Aligned; routes reused — see `workers/STRUCTURE.md` |
+| Hono `/api/v1` handlers | ~**235** (auth, trainer, student, roles, shared, mutations, print, …) |
+| React AppRouter | ~**229** routes; FeaturePlaceholder unused |
+| Bearer SPA (`VITE_AUTH_MODE=bearer`) | **Default** for Pages → Workers |
+| Payments | **N/A** (none in Flask) |
+| Biometric live device API | **Still Flask** (`VITE_LEGACY_ORIGIN`) |
+| ReportLab / openpyxl | **Still Flask** or browser-print JSON (`/print/*`) |
+| Root Containers (Flask-in-Docker) | **Legacy alternate** — see `CONTAINERS.md` |
 | Production DNS cutover | **Not started** |
+
+### Parity matrix (high level)
+
+| Area | Flask | Workers + Pages |
+|---|---|---|
+| Auth login / me / password / forgot | Yes | Yes (Bearer JWT) |
+| Trainer attendance / marks / assessments | Yes | Yes (core JSON) |
+| Student marks / POE / bookings | Yes | Yes (core JSON) |
+| Admin / dept / clearance / attachment / trips / summative | Yes (HTML+JSON) | Mostly list/mutation JSON + React shells |
+| Print reports | ReportLab + HTML | Browser print via `/print/*` JSON |
+| Excel import/export | openpyxl | Legacy Flask until client port |
+| Biometric scan/enroll | In-memory Flask | Keep Flask device host |
+| Payments | None | None |
 
 Local smoke test:
 
@@ -600,4 +619,4 @@ npm ci && npm run check && npx wrangler dev   # :8787
 cd ../frontend && npm ci && npm run dev       # :5173 proxies /api → Worker
 ```
 
-*End of inventory. Further phases expand the Worker API and React portals without deleting Flask until parity.*
+*End of inventory. Expand Workers/React endpoint-by-endpoint from Flask; delete Flask only after cutover gates pass.*

@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 # Non-secret configuration. Secrets (SUPABASE_SERVICE_ROLE_KEY, SESSION_SECRET,
 # SUPABASE_ANON_KEY) are set with `wrangler secret put <NAME>` — never here.
 [vars]
-SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+SUPABASE_URL = "https://kbxaawuxlycetxifltxf.supabase.co"
 # Comma-separated list of allowed browser origins (Cloudflare Pages URL + custom domain)
 ALLOWED_ORIGINS = "http://localhost:5173,https://ttti-ams.pages.dev"
 # Environment name reported by /api/health
