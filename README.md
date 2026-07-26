@@ -23,33 +23,27 @@ See `MIGRATION_INVENTORY.md` and `DEPLOYMENT.md` for the Cloudflare cutover plan
 
 ## System Architecture
 
-**Current production (Render + Flask):**
+**Source of truth**
+
+| Layer | Path | Role |
+|---|---|---|
+| Design / UI | `templates/` + `static/` | Jinja portals (authoritative look & screens) |
+| Functionality | `routes/` + helpers | Flask blueprints (authoritative business logic) |
+| Data | Supabase | PostgreSQL + Auth + Storage + RLS |
+| Cloudflare | `Dockerfile` + `src/index.ts` | Container runs Flask; Worker proxies to it |
+
+**Production path (Cloudflare Containers):**
 
 ```
-Browser
-  │
-  ├─ React + Vite SPA (`frontend/`) ── Axios ──► Flask /api/v1/*  (or Workers in Phase 1)
-  │
-  └─ Legacy Jinja portals (unchanged) ─────────► Flask HTML routes
-         │
-         ▼
-Render (Gunicorn → Flask app)  +  optional Cloudflare Workers API
-  │
-  ├── Supabase Auth  ← login / JWT / password reset
-  ├── Supabase DB    ← all application data (PostgreSQL + RLS)
-  └── Supabase Storage ← uploaded files (PDFs, photos, documents)
+Browser → Cloudflare Worker → Flask Container (gunicorn)
+                                 ├─ routes/*     (functionality)
+                                 ├─ templates/*  (design)
+                                 └─ static/*
+                              → Supabase
 ```
 
-**Target (Cloudflare-native — phased):**
-
-```
-Users → Cloudflare (DNS/CDN/WAF/DDoS)
-      → Pages (React SPA)
-      → Workers /api/v1 (Hono + Bearer JWT)
-      → Supabase (Postgres + Auth + Storage + RLS)
-```
-
-Flask on Render remains for Jinja portals, ReportLab/Excel, and biometric device endpoints until those phases complete. All data stays in Supabase.
+Optional React SPA under `frontend/` is an incremental migration experiment (`/spa`).
+Live portals remain Jinja until each screen is deliberately cut over.
 
 ---
 

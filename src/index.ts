@@ -1,17 +1,19 @@
 /**
- * TTTI AMS — single Cloudflare Worker:
- *   - React SPA from static assets (frontend/dist)
- *   - Flask (unmodified) in a Cloudflare Container for /api/* (+ biometric)
+ * TTTI AMS — Cloudflare Worker + Flask Container
  *
- * Same-origin: assets + container API share one hostname, so Flask session
- * cookies and CSRF work without cross-site CORS.
+ * SOURCE OF TRUTH (do not replace blindly):
+ *   - Design / UI  → templates/   (Jinja)
+ *   - Functionality → routes/     (Flask blueprints) + app helpers
+ *
+ * The Worker forwards essentially all traffic to the unmodified Flask app
+ * running in a Cloudflare Container (gunicorn). React under frontend/ is an
+ * incremental SPA migration; it is NOT the production UI for this deploy.
  */
 import { Container, getContainer } from '@cloudflare/containers'
 
 export interface Env {
   ASSETS: Fetcher
   FLASK_CONTAINER: DurableObjectNamespace<FlaskContainer>
-  /** Set with: wrangler secret put SECRET_KEY */
   SECRET_KEY: string
   SUPABASE_URL: string
   SUPABASE_ANON_KEY: string
@@ -26,7 +28,7 @@ export interface Env {
 
 /**
  * Durable Object that owns the Flask container lifecycle.
- * `class_name` must match wrangler.toml [[containers]] / durable_objects binding.
+ * class_name must match wrangler.toml [[containers]] / durable_objects binding.
  */
 export class FlaskContainer extends Container<Env> {
   defaultPort = 8080
@@ -35,7 +37,6 @@ export class FlaskContainer extends Container<Env> {
 
   constructor(ctx: DurableObjectState<{}>, env: Env) {
     super(ctx, env)
-    // Pass Worker secrets/vars into the Flask process (gunicorn → os.environ)
     this.envVars = {
       PORT: '8080',
       FLASK_ENV: env.FLASK_ENV || 'production',
@@ -54,7 +55,7 @@ export class FlaskContainer extends Container<Env> {
   }
 
   override onStart(): void {
-    console.log('[FlaskContainer] started on port', this.defaultPort)
+    console.log('[FlaskContainer] started — serving routes/ + templates/')
   }
 
   override onStop(params: { exitCode: number; reason: string }): void {
@@ -67,15 +68,47 @@ export class FlaskContainer extends Container<Env> {
   }
 }
 
-/** Paths that must hit the unmodified Flask app inside the container. */
-function shouldProxyToFlask(pathname: string): boolean {
-  return (
-    pathname === '/api' ||
-    pathname.startsWith('/api/') ||
-    pathname === '/biometric' ||
-    pathname.startsWith('/biometric/') ||
-    pathname.startsWith('/static/')
-  )
+/**
+ * Flask blueprint prefixes from app.py — these render templates/ and run routes/.
+ * Anything matching here MUST go to the container, never the React SPA.
+ */
+const FLASK_PREFIXES = [
+  '/api',
+  '/auth',
+  '/super-admin',
+  '/dept-admin',
+  '/trainer',
+  '/student',
+  '/examination-officer',
+  '/industry-mentor',
+  '/internal-verifier',
+  '/clearance',
+  '/admin-oversight',
+  '/notifications',
+  '/liaison-officer',
+  '/cdacc-verifier',
+  '/workshop-technician',
+  '/biometric',
+  '/service-dept',
+  '/academic-trips',
+  '/summative',
+  '/static',
+] as const
+
+/** Optional React SPA experiment mount (frontend/dist). Not used for portals. */
+const SPA_PREFIX = '/spa'
+
+function isFlaskPath(pathname: string): boolean {
+  if (pathname === '/' || pathname === '') return true
+  if (pathname === '/apply' || pathname.startsWith('/apply')) return true
+  for (const prefix of FLASK_PREFIXES) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return true
+  }
+  return false
+}
+
+function isSpaAssetPath(pathname: string): boolean {
+  return pathname === SPA_PREFIX || pathname.startsWith(`${SPA_PREFIX}/`)
 }
 
 function forwardToFlask(request: Request, env: Env): Promise<Response> {
@@ -83,11 +116,38 @@ function forwardToFlask(request: Request, env: Env): Promise<Response> {
   return stub.fetch(request)
 }
 
+async function proxyFlask(request: Request, env: Env): Promise<Response> {
+  try {
+    const res = await forwardToFlask(request, env)
+    const url = new URL(request.url)
+    const headers = new Headers(res.headers)
+    if (!headers.has('Access-Control-Allow-Origin')) {
+      headers.set('Access-Control-Allow-Origin', url.origin)
+      headers.set('Access-Control-Allow-Credentials', 'true')
+    }
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    })
+  } catch (err) {
+    console.error('[worker] Flask container proxy failed', err)
+    return new Response(
+      '<!DOCTYPE html><html><body><h1>Service starting</h1>' +
+        '<p>The academic system container is cold-starting. Refresh in a few seconds.</p></body></html>',
+      {
+        status: 503,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '5' },
+      },
+    )
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
-    if (request.method === 'OPTIONS' && shouldProxyToFlask(url.pathname)) {
+    if (request.method === 'OPTIONS' && isFlaskPath(url.pathname)) {
       return new Response(null, {
         status: 204,
         headers: {
@@ -101,33 +161,22 @@ export default {
       })
     }
 
-    if (shouldProxyToFlask(url.pathname)) {
-      try {
-        const res = await forwardToFlask(request, env)
-        const headers = new Headers(res.headers)
-        if (!headers.has('Access-Control-Allow-Origin')) {
-          headers.set('Access-Control-Allow-Origin', url.origin)
-          headers.set('Access-Control-Allow-Credentials', 'true')
-        }
-        return new Response(res.body, {
-          status: res.status,
-          statusText: res.statusText,
-          headers,
-        })
-      } catch (err) {
-        console.error('[worker] Flask container proxy failed', err)
-        return Response.json(
-          {
-            ok: false,
-            error:
-              'Flask container unavailable. It may be cold-starting — retry in a few seconds.',
-            code: 'container_unavailable',
-          },
-          { status: 503 },
-        )
-      }
+    // Production UI + API: Flask routes/ + templates/
+    if (isFlaskPath(url.pathname)) {
+      return proxyFlask(request, env)
     }
 
-    return env.ASSETS.fetch(request)
+    // Optional SPA under /spa/* only (experimental React port)
+    if (isSpaAssetPath(url.pathname)) {
+      const rewritten = new URL(request.url)
+      rewritten.pathname =
+        url.pathname === SPA_PREFIX || url.pathname === `${SPA_PREFIX}/`
+          ? '/index.html'
+          : url.pathname.slice(SPA_PREFIX.length) || '/index.html'
+      return env.ASSETS.fetch(new Request(rewritten.toString(), request))
+    }
+
+    // Unknown path → Flask 404 page from templates/errors/
+    return proxyFlask(request, env)
   },
 }

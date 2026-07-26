@@ -1,20 +1,26 @@
 # Cloudflare Workers + Containers (Flask) — TTTI AMS
 
-Deploy **both** the React SPA and the unmodified Flask API in **one** Cloudflare
-project: Worker Assets (React) + Cloudflare Containers (Flask/gunicorn), with a
-single Worker routing traffic.
+## Source of truth
+
+| Concern | Location | Runtime |
+|---|---|---|
+| **Design / UI** | `templates/` (+ `static/`) | Jinja HTML rendered by Flask |
+| **System functionality** | `routes/` (+ `app.py`, `auth_utils.py`, …) | Flask blueprints in the Container |
+| React SPA (`frontend/`) | Incremental port only | Optional at `/spa` — **not** the live portals |
+
+Do **not** replace template design or route business rules without documenting the change.
+The Cloudflare Container runs this Flask app **unmodified** via gunicorn.
 
 ```
 Users
   ↓
 Cloudflare Worker  (src/index.ts)
-  ├─ /api/* , /biometric/* , /static/*  →  Flask Container (Dockerfile → gunicorn :8080)
-  └─ /*                                 →  React SPA (frontend/dist)
+  ├─ / , /auth , /trainer , /student , /api , …  →  Flask Container
+  │         (routes/* + templates/* + static/*)
+  └─ /spa/*  (optional)                          →  React frontend/dist
   ↓
 Supabase (PostgreSQL + Auth + Storage + RLS)
 ```
-
-Flask app code is **not rewritten** — it runs as-is inside the container.
 
 ---
 
@@ -32,15 +38,14 @@ Flask app code is **not rewritten** — it runs as-is inside the container.
 
 | Path | Role |
 |---|---|
-| `Dockerfile` | Production Flask image (gunicorn on `0.0.0.0:8080`) |
+| `templates/` | **Design** — Jinja UI (source of truth) |
+| `routes/` | **Functionality** — Flask blueprints (source of truth) |
+| `Dockerfile` | Packs Flask + templates + routes + static for gunicorn `:8080` |
 | `.dockerignore` | Keeps image small |
-| `wrangler.toml` | Assets + `[[containers]]` + Durable Object binding |
-| `src/index.ts` | Router Worker + `FlaskContainer` DO class |
-| `frontend/` | React + Vite → build to `frontend/dist` |
+| `wrangler.toml` | Container + Durable Object; Worker runs first |
+| `src/index.ts` | Proxies all portal paths to Flask; `/spa` → React optional |
+| `frontend/` | Optional React experiment (not live portals) |
 | `package.json` | Root scripts: `build:frontend`, `dev`, `deploy` |
-
-The older `workers/` Hono API remains in the repo as an alternate path; **this**
-Containers layout is the one described by `wrangler.toml` at the repo root.
 
 ---
 
@@ -138,14 +143,11 @@ Also hit `https://<your-worker>.workers.dev/` and confirm the React login page l
 
 ## 4. CORS / cookies
 
-Same Worker hostname for SPA + `/api` ⇒ **same-origin**.
+Same Worker hostname for Jinja portals + `/api` ⇒ **same-origin**.
 
-- Frontend uses `withCredentials: true` and Flask CSRF (`X-CSRFToken`)
-- Leave `VITE_API_BASE_URL` **empty** in the Pages/Assets build
-- Flask `SPA_ORIGINS` is injected from Worker secrets/vars into the container
-
-Cross-origin is only needed if you later split hosts; then set `SPA_ORIGINS` and
-build the SPA with `VITE_API_BASE_URL=https://api-host`.
+- Flask session cookies work for HTML forms and `/api/v1`
+- Set `SPA_ORIGINS` in `wrangler.toml` to the Worker/custom domain
+- Optional React at `/spa` can call `/api/v1` with credentials if needed
 
 ---
 

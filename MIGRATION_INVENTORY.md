@@ -7,6 +7,15 @@
 
 Canonical inventory for the Cloudflare migration. Update this file in place when the surface changes. Do not invent parallel inventory docs.
 
+**Source of truth (unchanged by Cloudflare hosting):**
+
+| Concern | Authoritative location |
+|---|---|
+| Design / UI | `templates/` (+ `static/`) |
+| System functionality | `routes/` (+ `app.py`, `auth_utils.py`, `db.py`, …) |
+
+Cloudflare Containers run this Flask app unmodified. React under `frontend/` is optional (`/spa`), not a silent replacement of Jinja portals.
+
 Sources inspected: `app.py`, all `routes/*.py`, `auth_utils.py`, `db.py`, `security_utils.py`, `notifications.py`, PDF/Excel helpers, `supabase_schema.sql` + `*_migration.sql`, `frontend/` SPA, `README.md`, `SYSTEM_DOCUMENTATION.md`, `render.yaml`.
 
 ---
