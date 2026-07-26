@@ -4,19 +4,13 @@
 #   Design / UI   → templates/   (Jinja, served by Flask in the Container)
 #   Functionality → routes/      (Flask blueprints in the Container)
 #
-# React (frontend/) is an optional SPA experiment at /spa — not the live portals.
+# No Worker Assets / frontend/dist required — Cloudflare CI only needs
+# `npx wrangler deploy` (Flask UI is inside the Container image).
 
 name = "academic-management-system-254"
 main = "src/index.ts"
 compatibility_date = "2026-07-12"
 compatibility_flags = ["nodejs_compat"]
-
-# React build kept available for /spa/* only. Worker runs first for all paths.
-[assets]
-directory = "./frontend/dist"
-binding = "ASSETS"
-not_found_handling = "single-page-application"
-run_worker_first = true
 
 # Flask container = full app (routes/ + templates/ + static/)
 [[containers]]

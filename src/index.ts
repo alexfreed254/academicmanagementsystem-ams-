@@ -1,18 +1,16 @@
 /**
  * TTTI AMS — Cloudflare Worker + Flask Container
  *
- * SOURCE OF TRUTH (do not replace blindly):
+ * SOURCE OF TRUTH:
  *   - Design / UI  → templates/   (Jinja)
  *   - Functionality → routes/     (Flask blueprints) + app helpers
  *
- * The Worker forwards essentially all traffic to the unmodified Flask app
- * running in a Cloudflare Container (gunicorn). React under frontend/ is an
- * incremental SPA migration; it is NOT the production UI for this deploy.
+ * All HTTP traffic is proxied to the unmodified Flask app in the Container.
+ * No Worker Assets / frontend/dist required for deploy.
  */
 import { Container, getContainer } from '@cloudflare/containers'
 
 export interface Env {
-  ASSETS: Fetcher
   FLASK_CONTAINER: DurableObjectNamespace<FlaskContainer>
   SECRET_KEY: string
   SUPABASE_URL: string
@@ -68,49 +66,6 @@ export class FlaskContainer extends Container<Env> {
   }
 }
 
-/**
- * Flask blueprint prefixes from app.py — these render templates/ and run routes/.
- * Anything matching here MUST go to the container, never the React SPA.
- */
-const FLASK_PREFIXES = [
-  '/api',
-  '/auth',
-  '/super-admin',
-  '/dept-admin',
-  '/trainer',
-  '/student',
-  '/examination-officer',
-  '/industry-mentor',
-  '/internal-verifier',
-  '/clearance',
-  '/admin-oversight',
-  '/notifications',
-  '/liaison-officer',
-  '/cdacc-verifier',
-  '/workshop-technician',
-  '/biometric',
-  '/service-dept',
-  '/academic-trips',
-  '/summative',
-  '/static',
-] as const
-
-/** Optional React SPA experiment mount (frontend/dist). Not used for portals. */
-const SPA_PREFIX = '/spa'
-
-function isFlaskPath(pathname: string): boolean {
-  if (pathname === '/' || pathname === '') return true
-  if (pathname === '/apply' || pathname.startsWith('/apply')) return true
-  for (const prefix of FLASK_PREFIXES) {
-    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return true
-  }
-  return false
-}
-
-function isSpaAssetPath(pathname: string): boolean {
-  return pathname === SPA_PREFIX || pathname.startsWith(`${SPA_PREFIX}/`)
-}
-
 function forwardToFlask(request: Request, env: Env): Promise<Response> {
   const stub = getContainer(env.FLASK_CONTAINER, 'ttti-flask')
   return stub.fetch(request)
@@ -147,7 +102,7 @@ export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
-    if (request.method === 'OPTIONS' && isFlaskPath(url.pathname)) {
+    if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
         headers: {
@@ -161,22 +116,7 @@ export default {
       })
     }
 
-    // Production UI + API: Flask routes/ + templates/
-    if (isFlaskPath(url.pathname)) {
-      return proxyFlask(request, env)
-    }
-
-    // Optional SPA under /spa/* only (experimental React port)
-    if (isSpaAssetPath(url.pathname)) {
-      const rewritten = new URL(request.url)
-      rewritten.pathname =
-        url.pathname === SPA_PREFIX || url.pathname === `${SPA_PREFIX}/`
-          ? '/index.html'
-          : url.pathname.slice(SPA_PREFIX.length) || '/index.html'
-      return env.ASSETS.fetch(new Request(rewritten.toString(), request))
-    }
-
-    // Unknown path → Flask 404 page from templates/errors/
+    // Entire app: Flask routes/ + templates/ + static/ + /api
     return proxyFlask(request, env)
   },
 }

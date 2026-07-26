@@ -15,12 +15,13 @@ The Cloudflare Container runs this Flask app **unmodified** via gunicorn.
 Users
   ↓
 Cloudflare Worker  (src/index.ts)
-  ├─ / , /auth , /trainer , /student , /api , …  →  Flask Container
-  │         (routes/* + templates/* + static/*)
-  └─ /spa/*  (optional)                          →  React frontend/dist
+  └─ /*  →  Flask Container (routes/* + templates/* + static/*)
   ↓
 Supabase (PostgreSQL + Auth + Storage + RLS)
 ```
+
+`frontend/` remains in the repo for a future SPA cutover but is **not** part of
+the Cloudflare Workers deploy (no `assets.directory` / no `frontend/dist` required).
 
 ---
 
@@ -42,10 +43,10 @@ Supabase (PostgreSQL + Auth + Storage + RLS)
 | `routes/` | **Functionality** — Flask blueprints (source of truth) |
 | `Dockerfile` | Packs Flask + templates + routes + static for gunicorn `:8080` |
 | `.dockerignore` | Keeps image small |
-| `wrangler.toml` | Container + Durable Object; Worker runs first |
-| `src/index.ts` | Proxies all portal paths to Flask; `/spa` → React optional |
-| `frontend/` | Optional React experiment (not live portals) |
-| `package.json` | Root scripts: `build:frontend`, `dev`, `deploy` |
+| `wrangler.toml` | Container + Durable Object (no Worker Assets) |
+| `src/index.ts` | Proxies all requests to Flask Container |
+| `frontend/` | Optional React experiment (not deployed with Workers CI) |
+| `package.json` | Root scripts: `dev`, `deploy` → `wrangler deploy` |
 
 ---
 
