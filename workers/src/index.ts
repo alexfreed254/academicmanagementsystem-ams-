@@ -4,8 +4,8 @@
  * - /api/*  → Hono API (run_worker_first in wrangler.toml)
  * - /*      → React SPA from Worker Assets (frontend/dist)
  *
- * Open the workers.dev URL in a browser to see the website.
- * API-only JSON is at /api/health and /api/v1/*.
+ * Open http://127.0.0.1:8787 or your workers.dev URL to see the login UI.
+ * Do not open only /api — that is JSON.
  */
 import app from './app'
 

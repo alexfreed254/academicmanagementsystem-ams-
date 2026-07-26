@@ -1,0 +1,32 @@
+# TTTI AMS — Cloudflare Workers (SPA + Hono API)
+#
+# One Worker URL serves BOTH:
+#   /*       → React SPA (frontend/dist Worker Assets)
+#   /api/*   → Hono API (workers/src)
+#
+# Deploy: npm run deploy  (builds frontend, then wrangler deploy)
+#
+# Secrets: SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+
+name = "my-ams-project"
+main = "workers/src/index.ts"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+workers_dev = true
+preview_urls = true
+
+# React website + SPA fallback (open workers.dev → login UI, not JSON)
+[assets]
+directory = "./frontend/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[observability]
+enabled = true
+
+[vars]
+SUPABASE_URL = "https://kbxaawuxlycetxifltxf.supabase.co"
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:8787,http://localhost:8787"
+ENVIRONMENT = "production"

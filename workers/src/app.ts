@@ -53,11 +53,12 @@ app.use('*', async (c, next) => {
   return handler(c, next)
 })
 
-app.get('/', (c) =>
+// `/` is served by Worker Assets (React SPA). JSON info lives under /api/health.
+app.get('/api', (c) =>
   c.json({
     ok: true,
     service: 'ttti-ams-api',
-    message: 'Hono API Worker — UI is on Cloudflare Pages (ttti-ams).',
+    message: 'Hono API — React UI is served from Worker Assets at /',
     health: '/api/health',
     api_base: '/api/v1',
     examples: {

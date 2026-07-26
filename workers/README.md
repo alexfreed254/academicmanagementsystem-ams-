@@ -2,26 +2,30 @@
 
 Hono + TypeScript backend that ports the Flask `/api/v1` JSON API to Cloudflare Workers.
 
+**Important:** Open the Worker URL in a browser to see the **React login UI**.  
+`/api/*` is JSON only — if you only open `/api` or `/api/health` you will see a plain JSON page.
+
 ```
-Pages (React)  --Bearer JWT-->  this Worker  -->  Supabase Auth / DB / Storage
+Browser  →  /*           →  React SPA (frontend/dist Assets)
+         →  /api/v1/*    →  Hono API  →  Supabase
 ```
 
-Flask on Render remains available as reference and for legacy HTML / PDF / Excel / biometric until fully verified.
-
-## Quick start
+## Quick start (UI + API together)
 
 ```bash
+# from repo root
+npm --prefix frontend run build
+cd workers
+cp .dev.vars.example .dev.vars   # fill secrets
 npm install
-cp .dev.vars.example .dev.vars   # fill in Supabase keys + SESSION_SECRET
-npm run check
-npx wrangler dev                 # http://127.0.0.1:8787
+npx wrangler dev                 # http://127.0.0.1:8787  ← login UI
 ```
 
-From `frontend/`, Vite proxies `/api` → `:8787` by default.
+Or from repo root after `npm install`:
 
-## Layout
-
-See [`STRUCTURE.md`](./STRUCTURE.md).
+```bash
+npm run deploy    # production (builds SPA then deploys)
+```
 
 ## Secrets (never commit)
 
@@ -38,32 +42,12 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put SESSION_SECRET
 ```
 
-Non-secret vars live in `wrangler.toml` (`SUPABASE_URL`, `ALLOWED_ORIGINS`, `ENVIRONMENT`).
-
 ## Auth model (preserves Flask login rules)
 
 | Actor | Rule |
 |---|---|
-| Staff | Email + password → Supabase Auth `signInWithPassword` |
-| Student | Admission no + Werkzeug `password_hash` in `user_profiles` |
-| Session | Stateless HS256 JWT (1 day TTL) returned as `data.token`; SPA stores Bearer |
+| Staff | Email + password → Supabase Auth |
+| Student | Admission no + Werkzeug `password_hash` |
+| Session | Bearer JWT (`data.token`) |
 
-## Phase 2 coverage (SPA-wired first)
-
-Already mounted under `/api/v1`:
-
-- Auth: login / logout / me / csrf-token / profile / change-password / forgot-password / register
-- Notifications
-- Trainer: dashboard, marks-entry, assessments, attendance (+ extras)
-- Student: dashboard, attendance, units, marks (+ extras)
-- Additional admin / roles / shared / mutations / public / print modules from the prior port
-
-Still on Flask until later phases: live biometric device callbacks, ReportLab PDFs, openpyxl Excel streams.
-
-## Deploy
-
-```bash
-npx wrangler deploy
-```
-
-Keep `ALLOWED_ORIGINS` set to your Cloudflare Pages origin(s). Do not use `*` for credentialed or production SPA traffic.
+Flask remains for PDF / Excel / biometric until those are ported.

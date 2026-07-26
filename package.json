@@ -1,0 +1,16 @@
+{
+  "name": "my-ams-project",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:frontend",
+    "build:frontend": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "dev": "npm run build:frontend && wrangler dev",
+    "dev:api": "npm --prefix workers run dev",
+    "deploy": "npm run build:frontend && wrangler deploy",
+    "typecheck": "npm --prefix workers run check"
+  },
+  "devDependencies": {
+    "wrangler": "^4.28.0"
+  }
+}

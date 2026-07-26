@@ -1,22 +1,25 @@
 # TTTI AMS API — Cloudflare Worker (Hono + TypeScript)
-name = "ttti-ams-api"
+# Prefer root `wrangler.toml` + `npm run deploy` so the React SPA is also served.
+# This file is for API-only local work (`cd workers && npm run dev`) WITH assets.
+name = "my-ams-project"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Non-secret configuration. Secrets (SUPABASE_SERVICE_ROLE_KEY, SESSION_SECRET,
-# SUPABASE_ANON_KEY) are set with `wrangler secret put <NAME>` — never here.
+workers_dev = true
+
+# Serve built React app so http://127.0.0.1:8787 shows the login UI (not JSON)
+[assets]
+directory = "../frontend/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+# Non-secret configuration. Secrets go in `.dev.vars` / `wrangler secret put`.
 [vars]
 SUPABASE_URL = "https://kbxaawuxlycetxifltxf.supabase.co"
-# Comma-separated list of allowed browser origins (Cloudflare Pages URL + custom domain)
-ALLOWED_ORIGINS = "http://localhost:5173,https://ttti-ams.pages.dev"
-# Environment name reported by /api/health
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:8787,http://localhost:8787"
 ENVIRONMENT = "production"
 
 [observability]
 enabled = true
-
-# Optional: route the Worker on your own domain (uncomment after DNS is on Cloudflare)
-# routes = [
-#   { pattern = "api.yourdomain.ac.ke", custom_domain = true }
-# ]
