@@ -100,21 +100,20 @@ npx wrangler dev
 
 Open the URL Wrangler prints (usually `http://127.0.0.1:8787`).
 
-- SPA: `/`
+- App (Flask templates): `/`
 - API: `/api/v1/csrf-token`
-- First `/api` hit may be slow (container cold start)
+- First hit may be slow (container cold start)
 
-### E. Deploy
+### D. Deploy
 
 ```bash
-npm run build:frontend
 npx wrangler deploy
 ```
 
 Wrangler will build the Docker image, push it to Cloudflare’s registry, apply
 the Durable Object migration, and publish the Worker.
 
-### F. Verify the container is live
+### E. Verify the container is live
 
 ```bash
 npx wrangler containers list
