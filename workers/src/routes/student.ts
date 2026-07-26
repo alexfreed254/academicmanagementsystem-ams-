@@ -374,21 +374,134 @@ student.get('/student/exam-bookings', requireRole('student'), async (c) => {
   const db = getServiceClient(c.env)
   const { data } = await db
     .from('exam_bookings')
-    .select('*, units(name, code)')
+    .select('*, units(name, code), user_profiles!exam_bookings_approved_by_fkey(full_name)')
     .eq('student_id', user.id)
     .order('created_at', { ascending: false })
-  return ok(c, { items: data ?? [] })
+
+  const items = (data ?? []) as Row[]
+  const groups = new Map<
+    string,
+    {
+      serial_number: string
+      created_at: string
+      exam_session: string
+      status: string
+      approved_at: string
+      rejection_reason: string
+      reviewer: string
+      bookings: Row[]
+      _statuses: string[]
+    }
+  >()
+
+  for (const b of items) {
+    const sn = String(b.serial_number || b.id)
+    let g = groups.get(sn)
+    if (!g) {
+      g = {
+        serial_number: sn,
+        created_at: String(b.created_at || ''),
+        exam_session: String(b.exam_session || ''),
+        status: String(b.status || 'pending'),
+        approved_at: String(b.approved_at || ''),
+        rejection_reason: String(b.rejection_reason || ''),
+        reviewer: String(((b.user_profiles as Row | null)?.full_name as string) || ''),
+        bookings: [],
+        _statuses: [],
+      }
+      groups.set(sn, g)
+    }
+    g.bookings.push(b)
+    g._statuses.push(String(b.status || 'pending'))
+  }
+
+  const booking_groups = [...groups.values()].map((g) => {
+    const sts = new Set(g._statuses)
+    let status = 'pending'
+    if (sts.has('pending')) status = 'pending'
+    else if (sts.has('rejected') && sts.size === 1) status = 'rejected'
+    else if (sts.has('rejected')) status = 'pending'
+    else if (sts.has('approved')) status = 'approved'
+    else if (sts.has('completed')) status = 'completed'
+    else status = [...sts][0] || 'pending'
+    const { _statuses: _, ...rest } = g
+    return { ...rest, status }
+  })
+
+  return ok(c, { items, booking_groups })
 })
+
+const PERSONAL_DOC_TYPES = [
+  'passport_photo',
+  'admission_letter',
+  'medical_form',
+  'personal_data_form',
+  'declaration_form',
+  'kcse_result_slip',
+  'kcse_certificate',
+  'kcpe_result_slip',
+  'birth_certificate',
+  'national_id',
+  'guardian_id',
+  'consent_form',
+  'most_recent_result_slip',
+] as const
 
 student.get('/student/documents', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
-  const { data } = await db
+
+  const { data: student } = await db.from('user_profiles').select('*').eq('id', user.id).maybeSingle()
+
+  const { data: enrollmentRows } = await db
+    .from('enrollments')
+    .select('*, classes(id, name, course_id)')
+    .eq('student_id', user.id)
+    .limit(1)
+  const enrollment = ((enrollmentRows ?? []) as Row[])[0] || null
+  const classData = (enrollment?.classes as Row | null) || null
+
+  let courseName = ''
+  let departmentName = ''
+  if (classData?.course_id) {
+    const { data: course } = await db
+      .from('courses')
+      .select('*, departments(name)')
+      .eq('id', classData.course_id as string)
+      .maybeSingle()
+    courseName = String((course as Row | null)?.name || '')
+    departmentName = String(((course as Row | null)?.departments as Row | null)?.name || '')
+  }
+
+  const { data: docsRaw } = await db
+    .from('student_personal_documents')
+    .select('*')
+    .eq('student_id', user.id)
+    .order('updated_at', { ascending: false })
+
+  const documentsList = (docsRaw ?? []) as Row[]
+  const documents: Record<string, Row> = {}
+  for (const d of documentsList) {
+    documents[String(d.document_type || '')] = d
+  }
+
+  // Keep legacy trainee_documents list for older SPA table views
+  const { data: legacyDocs } = await db
     .from('trainee_documents')
     .select('*')
     .eq('student_id', user.id)
     .order('created_at', { ascending: false })
-  return ok(c, { items: data ?? [] })
+
+  return ok(c, {
+    student: student ?? {},
+    course_name: courseName,
+    department_name: departmentName,
+    documents,
+    documents_list: documentsList,
+    total_doc_types: PERSONAL_DOC_TYPES.length,
+    doc_types: [...PERSONAL_DOC_TYPES],
+    items: legacyDocs ?? [],
+  })
 })
 
 student.get('/student/industrial-attachment', requireRole('student'), async (c) => {

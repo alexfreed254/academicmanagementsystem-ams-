@@ -34,37 +34,8 @@ export function StudentPortfolioPage() {
   )
 }
 
-export function StudentDocumentsPage() {
-  return (
-    <ApiTablePage
-      title="My Documents"
-      endpoint="/student/documents"
-      rowsKey="items"
-      columns={[
-        { key: 'document_type', label: 'Type' },
-        { key: 'file_name', label: 'File' },
-        { key: 'created_at', label: 'Uploaded' },
-      ]}
-    />
-  )
-}
-
-export function StudentExamBookingsPage() {
-  return (
-    <ApiTablePage
-      title="My Exam Bookings"
-      endpoint="/student/exam-bookings"
-      rowsKey="items"
-      columns={[
-        { key: 'units.name', label: 'Unit', render: (r) => cell(r, 'units.name') },
-        { key: 'exam_date', label: 'Exam Date' },
-        { key: 'exam_session', label: 'Session' },
-        { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
-      ]}
-    />
-  )
-}
-
+export { default as StudentDocumentsPage } from '@/pages/student/MyDocumentsPage'
+export { default as StudentExamBookingsPage } from '@/pages/student/ExamBookingsPage'
 export { default as StudentExamBookingFormPage } from '@/pages/student/ExamBookingNewPage'
 
 export function StudentIndustrialAttachmentPage() {

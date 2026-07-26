@@ -194,6 +194,128 @@ mutations.post('/clearance/student/start', requireRole('student'), async (c) => 
 
 /* ── Exam bookings ───────────────────────────────────────────────────────── */
 
+mutations.post('/student/documents/profile', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const body = await bodyJson(c)
+  const updates: Record<string, unknown> = {}
+  for (const key of ['gender', 'mobile_number', 'national_id_no', 'date_of_birth', 'county', 'sub_county', 'village']) {
+    if (body[key] !== undefined) {
+      const v = String(body[key] ?? '').trim()
+      updates[key] = v || null
+    }
+  }
+  if (!Object.keys(updates).length) return err(c, 'No profile fields to update.', 400)
+
+  let data = { ...updates }
+  for (let i = 0; i < 10; i++) {
+    const { error } = await db.from('user_profiles').update(data).eq('id', user.id)
+    if (!error) {
+      writeAuditLog(c, 'update_profile', `user:${user.id}`)
+      return ok(c, { updated: true })
+    }
+    const msg = error.message || ''
+    const unknownCol = msg.match(/'(\w+)' column/) || msg.match(/Could not find the '(\w+)' column/)
+    if (unknownCol) {
+      delete data[unknownCol[1]]
+      if (!Object.keys(data).length) return err(c, 'Profile could not be saved — DB migration required.', 400)
+      continue
+    }
+    return err(c, msg, 400)
+  }
+  return err(c, 'Profile could not be saved.', 400)
+})
+
+mutations.post('/student/documents/upload', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const body = await bodyJson(c)
+  const files = Array.isArray(body.files) ? (body.files as Row[]) : []
+  if (!files.length) return err(c, 'No files were selected.', 400)
+
+  const allowed = new Set([
+    'passport_photo',
+    'admission_letter',
+    'medical_form',
+    'personal_data_form',
+    'declaration_form',
+    'kcse_result_slip',
+    'kcse_certificate',
+    'kcpe_result_slip',
+    'birth_certificate',
+    'national_id',
+    'guardian_id',
+    'consent_form',
+    'most_recent_result_slip',
+  ])
+
+  let uploaded = 0
+  const errors: string[] = []
+  const base = c.env.SUPABASE_URL.replace(/\/$/, '')
+
+  for (const file of files) {
+    const docType = String(file.document_type || '').trim()
+    const fileName = String(file.file_name || '').trim()
+    const b64 = String(file.file_base64 || '').trim()
+    if (!allowed.has(docType) || !fileName || !b64) {
+      errors.push(`${docType || 'file'}: invalid payload`)
+      continue
+    }
+    const docLabel = docType.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase())
+    try {
+      const bytes = decodeBase64Payload(b64)
+      if (bytes.length > 5 * 1024 * 1024) {
+        errors.push(`${docLabel}: file too large (max 5MB)`)
+        continue
+      }
+      const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : 'bin'
+      if (!['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+        errors.push(`${docLabel}: unsupported file type`)
+        continue
+      }
+      const storagePath = `trainee_documents/${user.id}_${docType}_${crypto.randomUUID().replace(/-/g, '')}.${ext}`
+      const contentType = String(file.content_type || 'application/octet-stream')
+      await uploadBytes(db, 'assessment-evidence', storagePath, bytes, contentType)
+      const publicUrl = `${base}/storage/v1/object/public/assessment-evidence/${storagePath}`
+
+      const { data: existing } = await db
+        .from('student_personal_documents')
+        .select('id')
+        .eq('student_id', user.id)
+        .eq('document_type', docType)
+        .limit(1)
+
+      const payload = {
+        document_name: docLabel,
+        file_url: publicUrl,
+        file_path: storagePath,
+        file_name: fileName,
+        file_size: bytes.length,
+        status: 'pending',
+      }
+      const row = ((existing ?? []) as Row[])[0]
+      if (row?.id) {
+        const { error } = await db.from('student_personal_documents').update(payload).eq('id', row.id as string)
+        if (error) throw new Error(error.message)
+      } else {
+        const { error } = await db.from('student_personal_documents').insert({
+          student_id: user.id,
+          document_type: docType,
+          ...payload,
+        })
+        if (error) throw new Error(error.message)
+      }
+      uploaded += 1
+    } catch (e) {
+      errors.push(`${docLabel}: ${e instanceof Error ? e.message : 'upload failed'}`)
+    }
+  }
+
+  if (uploaded) writeAuditLog(c, 'upload_documents', `user:${user.id}`)
+  if (!uploaded && errors.length) return err(c, errors.join('; '), 400)
+  return ok(c, { uploaded, errors })
+})
+
 mutations.post('/student/exam-bookings', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
