@@ -4,6 +4,11 @@ import { ok, err } from '../lib/responses'
 import { requireRole } from '../middleware/auth'
 import { currentMonthLabelEAT, currentYearEAT } from '../lib/dates'
 import { buildMarksTranscriptView } from '../lib/transcript'
+import {
+  getOpenPeriod,
+  attachmentPeriodsExist,
+  studentCanSubmitPlacement,
+} from '../lib/attachmentHelpers'
 import type { Env, AppVariables } from '../types'
 
 const student = new Hono<{ Bindings: Env; Variables: AppVariables }>()
@@ -507,23 +512,161 @@ student.get('/student/documents', requireRole('student'), async (c) => {
 student.get('/student/industrial-attachment', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
-  const { data } = await db
+
+  const { data: enrollmentRows } = await db
+    .from('enrollments')
+    .select('class_id, classes(id, name, departments(name))')
+    .eq('student_id', user.id)
+    .limit(1)
+  const enrollment = ((enrollmentRows ?? []) as Row[])[0] || null
+  const cls = (enrollment?.classes as Row | null) || null
+  const dept = (cls?.departments as Row | null) || null
+  const classLabel = String(cls?.name || '')
+  const deptLabel = String(dept?.name || '')
+  const courseName =
+    deptLabel && classLabel ? `${deptLabel} — ${classLabel}` : deptLabel || classLabel
+
+  const { data: profileRows } = await db
+    .from('user_profiles')
+    .select('full_name, admission_no, mobile_number')
+    .eq('id', user.id)
+    .limit(1)
+  const profile = ((profileRows ?? []) as Row[])[0] || {}
+
+  const { data: allAttachments } = await db
     .from('industrial_attachments')
-    .select('*, companies(name, address), units(name, code)')
+    .select(
+      '*, companies(name, address, latitude, longitude, contact_person, contact_phone, geofence_radius_meters), units(name, code)',
+    )
     .eq('student_id', user.id)
     .order('created_at', { ascending: false })
-  return ok(c, { items: data ?? [] })
+
+  const list = (allAttachments ?? []) as Row[]
+  let current =
+    list.find((a) => ['active', 'pending', 'approved', 'rejected'].includes(String(a.status))) || null
+  if (!current && list.length) current = list[0]
+
+  let todayLogs: Row[] = []
+  if (current && String(current.status) === 'active') {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: logs } = await db
+      .from('location_logs')
+      .select('*')
+      .eq('student_id', user.id)
+      .eq('attachment_id', current.id as string)
+      .gte('check_in_time', today)
+      .order('check_in_time', { ascending: false })
+    todayLogs = (logs ?? []) as Row[]
+  }
+
+  const openPeriod = await getOpenPeriod(db)
+  let canSubmit = true
+  let submitBlockMsg = ''
+  if (openPeriod) {
+    const eligible = await studentCanSubmitPlacement(
+      db,
+      user.id,
+      String(openPeriod.term || ''),
+      Number(openPeriod.year) || new Date().getFullYear(),
+    )
+    canSubmit = eligible.allowed
+    submitBlockMsg = eligible.message
+  } else if (await attachmentPeriodsExist(db)) {
+    canSubmit = false
+    submitBlockMsg =
+      'No attachment application window is currently open. The liaison officer will open the period and issue introduction letters when ready.'
+  }
+
+  return ok(c, {
+    items: list,
+    current_attachment: current,
+    all_attachments: list,
+    course_name: courseName,
+    profile,
+    today_logs: todayLogs,
+    open_period: openPeriod,
+    can_submit_placement: canSubmit,
+    submit_block_msg: submitBlockMsg,
+  })
 })
 
 student.get('/student/logbook', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
-  const { data } = await db
-    .from('digital_logbook')
-    .select('*')
+
+  let { data: activeRows } = await db
+    .from('industrial_attachments')
+    .select('*, companies(name)')
     .eq('student_id', user.id)
-    .order('created_at', { ascending: false })
-  return ok(c, { items: data ?? [] })
+    .eq('status', 'active')
+    .limit(1)
+  let attachment = ((activeRows ?? []) as Row[])[0] || null
+  if (!attachment) {
+    const { data: anyRows } = await db
+      .from('industrial_attachments')
+      .select('*, companies(name)')
+      .eq('student_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    attachment = ((anyRows ?? []) as Row[])[0] || null
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  let logbooks: Row[] = []
+  const weeksGrouped: { week_start: string; label: string; entries: Row[] }[] = []
+
+  if (attachment?.id) {
+    const { data } = await db
+      .from('digital_logbook')
+      .select('*')
+      .eq('student_id', user.id)
+      .eq('attachment_id', attachment.id as string)
+      .order('log_date', { ascending: false })
+    const base = c.env.SUPABASE_URL.replace(/\/$/, '')
+    logbooks = ((data ?? []) as Row[]).map((entry) => {
+      const paths = (entry.evidence_urls as string[] | null) || []
+      const _evidence = paths.filter(Boolean).map((p) => ({
+        url: `${base}/storage/v1/object/public/assessment-evidence/${p}`,
+        ext: p.includes('.') ? p.split('.').pop()!.toLowerCase() : 'bin',
+        name: p.includes('/') ? p.split('/').pop()! : p,
+      }))
+      return { ...entry, _evidence }
+    })
+
+    const buckets = new Map<string, Row[]>()
+    for (const entry of logbooks) {
+      const raw = String(entry.log_date || entry.entry_date || todayStr)
+      const d = new Date(`${raw.slice(0, 10)}T12:00:00Z`)
+      const day = Number.isNaN(d.getTime()) ? new Date() : d
+      const monday = new Date(day)
+      monday.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7))
+      const key = monday.toISOString().slice(0, 10)
+      if (!buckets.has(key)) buckets.set(key, [])
+      buckets.get(key)!.push(entry)
+    }
+    const fmt = (iso: string) => {
+      const d = new Date(`${iso}T12:00:00Z`)
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    }
+    for (const weekStart of [...buckets.keys()].sort((a, b) => (a < b ? 1 : -1))) {
+      const sun = new Date(`${weekStart}T12:00:00Z`)
+      sun.setUTCDate(sun.getUTCDate() + 6)
+      const sunIso = sun.toISOString().slice(0, 10)
+      weeksGrouped.push({
+        week_start: weekStart,
+        label: `${fmt(weekStart).replace(/ \d{4}$/, '')} – ${fmt(sunIso)}`,
+        entries: buckets.get(weekStart) || [],
+      })
+    }
+  }
+
+  return ok(c, {
+    items: logbooks,
+    attachment,
+    logbooks,
+    weeks_grouped: weeksGrouped,
+    today_str: todayStr,
+  })
 })
 
 student.get('/student/attachment-marks', requireRole('student'), async (c) => {

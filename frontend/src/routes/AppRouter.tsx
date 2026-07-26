@@ -71,6 +71,8 @@ const StudentMarksPage = lazy(() => import('@/pages/student/MarksPage'))
 const ExamBookingNewPage = lazy(() => import('@/pages/student/ExamBookingNewPage'))
 const MyDocumentsPage = lazy(() => import('@/pages/student/MyDocumentsPage'))
 const ExamBookingsPage = lazy(() => import('@/pages/student/ExamBookingsPage'))
+const IndustrialAttachmentPage = lazy(() => import('@/pages/student/IndustrialAttachmentPage'))
+const LogbookPage = lazy(() => import('@/pages/student/LogbookPage'))
 const StudentDetailPages = {
   StudentUploadAssessmentPage: lazy(() =>
     import('@/pages/student/DetailPages').then((m) => ({ default: m.StudentUploadAssessmentPage })),
@@ -256,8 +258,8 @@ export function AppRouter() {
               <Route path="/student/documents" element={<L><MyDocumentsPage /></L>} />
               <Route path="/student/exam-booking-form" element={<L><ExamBookingNewPage /></L>} />
               <Route path="/student/exam-bookings" element={<L><ExamBookingsPage /></L>} />
-              <Route path="/student/industrial-attachment" element={<L><STMenus.StudentIndustrialAttachmentPage /></L>} />
-              <Route path="/student/logbook" element={<L><STMenus.StudentLogbookPage /></L>} />
+              <Route path="/student/industrial-attachment" element={<L><IndustrialAttachmentPage /></L>} />
+              <Route path="/student/logbook" element={<L><LogbookPage /></L>} />
               <Route path="/student/attachment-marks" element={<L><STMenus.StudentAttachmentMarksPage /></L>} />
               <Route path="/student/mentoring-tool" element={<L><STMenus.StudentMentoringToolPage /></L>} />
               <Route path="/student/employment-status" element={<L><STMenus.StudentEmploymentStatusPage /></L>} />

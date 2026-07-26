@@ -37,47 +37,8 @@ export function StudentPortfolioPage() {
 export { default as StudentDocumentsPage } from '@/pages/student/MyDocumentsPage'
 export { default as StudentExamBookingsPage } from '@/pages/student/ExamBookingsPage'
 export { default as StudentExamBookingFormPage } from '@/pages/student/ExamBookingNewPage'
-
-export function StudentIndustrialAttachmentPage() {
-  return (
-    <ApiTablePage
-      title="Attachment Placement & Letter Review"
-      endpoint="/student/industrial-attachment"
-      rowsKey="items"
-      columns={[
-        { key: 'companies.name', label: 'Company', render: (r) => cell(r, 'companies.name') },
-        { key: 'units.name', label: 'Unit', render: (r) => cell(r, 'units.name') },
-        { key: 'status', label: 'Status', render: (r) => <StatusPill value={r.status} /> },
-      ]}
-    />
-  )
-}
-
-export function StudentLogbookPage() {
-  return (
-    <InteractiveTablePage
-      title="Digital Logbook"
-      endpoint="/student/logbook"
-      rowsKey="items"
-      columns={[
-        { key: 'week_number', label: 'Week' },
-        { key: 'activities', label: 'Activities' },
-        { key: 'entry_date', label: 'Date' },
-        {
-          key: 'mentor_approval_status',
-          label: 'Status',
-          render: (r) => <StatusPill value={r.mentor_approval_status || r.status} />,
-        },
-      ]}
-      createLabel="Add entry"
-      createFields={[
-        { name: 'activities', label: 'Activities', type: 'textarea', required: true },
-        { name: 'week_number', label: 'Week number', type: 'number', required: true },
-        { name: 'entry_date', label: 'Entry date', type: 'date', required: true },
-      ]}
-    />
-  )
-}
+export { default as StudentIndustrialAttachmentPage } from '@/pages/student/IndustrialAttachmentPage'
+export { default as StudentLogbookPage } from '@/pages/student/LogbookPage'
 
 export function StudentAttachmentMarksPage() {
   return (

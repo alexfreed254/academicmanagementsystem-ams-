@@ -9,6 +9,11 @@ import { requireAuth, requireRole, deptIsolationCheck } from '../middleware/auth
 import { writeAuditLog } from '../lib/audit'
 import { generateWerkzeugHash } from '../lib/passwords'
 import { decodeBase64Payload, fileSlug, uploadBytes } from '../lib/storageUpload'
+import {
+  studentCanSubmitPlacement,
+  haversineMeters,
+  INDUSTRIES,
+} from '../lib/attachmentHelpers'
 import type { Env, AppVariables } from '../types'
 
 const mutations = new Hono<{ Bindings: Env; Variables: AppVariables }>()
@@ -654,25 +659,331 @@ mutations.post('/liaison-officer/attachments/:id/reject', requireRole('liaison_o
   return ok(c, { rejected: true })
 })
 
-/* ── Student logbook + employment ────────────────────────────────────────── */
+/* ── Student industrial attachment + logbook ─────────────────────────────── */
+
+mutations.post('/student/industrial-attachment/request', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const body = await bodyJson(c)
+
+  const companyName = String(body.company_name || '').trim()
+  const industryRaw = String(body.industry || 'Other').trim()
+  const industry = (INDUSTRIES as readonly string[]).includes(industryRaw) ? industryRaw : 'Other'
+  const companyDepartment = String(body.company_department || '').trim()
+  const companyAddress = String(body.company_address || '').trim()
+  const county = String(body.county || '').trim()
+  const town = String(body.town || '').trim()
+  const companyEmail = String(body.company_email || '').trim()
+  const companyPhone = String(body.company_phone || '').trim()
+  const website = String(body.website || '').trim()
+  const supervisorName = String(body.supervisor_name || '').trim()
+  const supervisorPosition = String(body.supervisor_position || '').trim()
+  const supervisorContact = String(body.supervisor_contact || '').trim()
+  const supervisorEmail = String(body.supervisor_email || '').trim()
+  const attachmentTerm = String(body.attachment_term || '').trim()
+  const yearInt = Number(body.attachment_year) || new Date().getFullYear()
+  const startDate = String(body.start_date || '').trim()
+  const endDate = String(body.end_date || '').trim()
+  const expectedHours = String(body.expected_working_hours || '').trim()
+  const mobileNumber = String(body.mobile_number || '').trim()
+  const latitude = body.latitude !== undefined && body.latitude !== '' ? Number(body.latitude) : null
+  const longitude = body.longitude !== undefined && body.longitude !== '' ? Number(body.longitude) : null
+
+  if (
+    !companyName ||
+    !companyAddress ||
+    !county ||
+    !town ||
+    !supervisorName ||
+    !supervisorPosition ||
+    !supervisorContact ||
+    !attachmentTerm ||
+    !startDate ||
+    !endDate
+  ) {
+    return err(c, 'Please complete all required placement fields.', 400)
+  }
+
+  const acceptance = (body.acceptance_letter as Row | undefined) || null
+  if (!acceptance?.file_base64 || !acceptance?.file_name) {
+    return err(c, 'Upload the company acceptance letter before submitting.', 400)
+  }
+
+  const gate = await studentCanSubmitPlacement(db, user.id, attachmentTerm, yearInt)
+  if (!gate.allowed) return err(c, gate.message, 400)
+  const periodId = gate.period?.id ? String(gate.period.id) : null
+
+  const base = c.env.SUPABASE_URL.replace(/\/$/, '')
+
+  async function uploadDoc(file: Row, label: string) {
+    const fileName = String(file.file_name || 'doc.bin')
+    const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : 'bin'
+    if (!['pdf', 'jpg', 'jpeg', 'png'].includes(ext)) throw new Error(`${label} must be PDF/JPG/PNG.`)
+    const bytes = decodeBase64Payload(String(file.file_base64 || ''))
+    const storagePath = `industrial_attachment_letters/${user.id}/${crypto.randomUUID()}_${fileSlug(label)}.${ext}`
+    await uploadBytes(db, 'assessment-scripts', storagePath, bytes, String(file.content_type || 'application/octet-stream'))
+    return {
+      url: `${base}/storage/v1/object/public/assessment-scripts/${storagePath}`,
+      path: storagePath,
+      name: fileName,
+    }
+  }
+
+  try {
+    const letter = await uploadDoc(acceptance, companyName)
+    const docUrls: Record<string, string> = {}
+    for (const key of ['offer_letter', 'introduction_letter', 'company_stamp', 'signed_acceptance_form'] as const) {
+      const f = body[key] as Row | undefined
+      if (f?.file_base64 && f?.file_name) {
+        const up = await uploadDoc(f, key)
+        docUrls[`${key}_url`] = up.url
+      }
+    }
+
+    const companyPayload: Record<string, unknown> = {
+      name: companyName,
+      industry_classification: industry,
+      address: companyAddress,
+      city: town,
+      county,
+      email: companyEmail || null,
+      phone_number: companyPhone || null,
+      website: website || null,
+      company_department: companyDepartment || null,
+      contact_person: supervisorName,
+      contact_phone: supervisorContact,
+      contact_email: supervisorEmail || null,
+      is_active: true,
+      available_slots: 1,
+      created_by: user.id,
+    }
+    if (latitude != null && !Number.isNaN(latitude)) companyPayload.latitude = latitude
+    if (longitude != null && !Number.isNaN(longitude)) companyPayload.longitude = longitude
+
+    let companyData = { ...companyPayload }
+    let companyId = ''
+    for (let i = 0; i < 10; i++) {
+      const { data, error } = await db.from('companies').insert(companyData).select('id').single()
+      if (!error && data) {
+        companyId = String((data as Row).id)
+        break
+      }
+      const msg = error?.message || ''
+      const unknownCol = msg.match(/'(\w+)' column/) || msg.match(/Could not find the '(\w+)' column/)
+      if (unknownCol) {
+        delete companyData[unknownCol[1]]
+        continue
+      }
+      return err(c, msg || 'Could not create company.', 400)
+    }
+    if (!companyId) return err(c, 'Could not create company.', 400)
+
+    if (mobileNumber) {
+      await db.from('user_profiles').update({ mobile_number: mobileNumber }).eq('id', user.id)
+    }
+
+    const attPayload: Record<string, unknown> = {
+      student_id: user.id,
+      company_id: companyId,
+      start_date: startDate,
+      end_date: endDate,
+      status: 'pending',
+      placement_status: 'pending_verification',
+      created_by: user.id,
+      acceptance_letter_url: letter.url,
+      acceptance_letter_name: letter.name,
+      acceptance_letter_path: letter.path,
+      acceptance_letter_status: 'pending',
+      supervisor_email: supervisorEmail || null,
+      supervisor_position: supervisorPosition,
+      expected_working_hours: expectedHours || null,
+      placement_details: {
+        county,
+        town,
+        company_department: companyDepartment,
+        expected_working_hours: expectedHours,
+        workflow: 'placement_first_v1',
+      },
+      attachment_term: attachmentTerm,
+      attachment_year: yearInt,
+      ...docUrls,
+    }
+    if (periodId) attPayload.period_id = periodId
+
+    let attData = { ...attPayload }
+    let inserted = false
+    for (let i = 0; i < 15 && !inserted; i++) {
+      const { error } = await db.from('industrial_attachments').insert(attData)
+      if (!error) {
+        inserted = true
+        break
+      }
+      const msg = error.message || ''
+      const unknownCol = msg.match(/'(\w+)' column/) || msg.match(/Could not find the '(\w+)' column/)
+      if (unknownCol) {
+        delete attData[unknownCol[1]]
+        continue
+      }
+      return err(c, msg, 400)
+    }
+    if (!inserted) return err(c, 'Could not submit placement.', 400)
+
+    const { data: officers } = await db.from('user_profiles').select('id').eq('role', 'liaison_officer')
+    for (const officer of (officers ?? []) as Row[]) {
+      await db.from('notifications').insert({
+        user_id: officer.id,
+        title: 'New Placement Submission',
+        message: `${user.full_name || 'A trainee'} submitted placement details for ${companyName}.`,
+        notification_type: 'info',
+        action_url: '/liaison-officer/attachments?status=pending',
+      })
+    }
+
+    writeAuditLog(c, 'submit_placement', `company:${companyId}`)
+    return ok(c, { submitted: true, company_id: companyId })
+  } catch (e) {
+    return err(c, e instanceof Error ? e.message : 'Error submitting placement.', 400)
+  }
+})
+
+mutations.post('/student/industrial-attachment/:id/delete', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const id = c.req.param('id')
+  const { data: rows } = await db
+    .from('industrial_attachments')
+    .select('id, status, company_id, created_by, acceptance_letter_path')
+    .eq('id', id)
+    .eq('student_id', user.id)
+    .limit(1)
+  const att = ((rows ?? []) as Row[])[0]
+  if (!att) return err(c, 'Attachment not found.', 404)
+  if (String(att.status) !== 'pending') return err(c, 'Only submitted (pending) attachments can be deleted.', 400)
+
+  await db.from('industrial_attachments').delete().eq('id', id)
+  if (att.company_id) {
+    await db.from('companies').delete().eq('id', att.company_id as string).eq('created_by', user.id)
+  }
+  writeAuditLog(c, 'delete_attachment', `attachment:${id}`)
+  return ok(c, { deleted: true })
+})
+
+mutations.post('/student/check-in', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const body = await bodyJson(c)
+  const attachmentId = String(body.attachment_id || '').trim()
+  const latitude = Number(body.latitude)
+  const longitude = Number(body.longitude)
+  if (!attachmentId || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+    return err(c, 'Attachment ID and location coordinates are required.', 400)
+  }
+
+  const { data: attachment } = await db
+    .from('industrial_attachments')
+    .select('*, companies(latitude, longitude, geofence_radius_meters)')
+    .eq('id', attachmentId)
+    .eq('student_id', user.id)
+    .eq('status', 'active')
+    .maybeSingle()
+  if (!attachment) return err(c, 'Active attachment not found.', 404)
+
+  const company = ((attachment as Row).companies as Row) || {}
+  const companyLat = Number(company.latitude)
+  const companyLon = Number(company.longitude)
+  const radius = Number(company.geofence_radius_meters) || 300
+  let isWithin = true
+  let distance = 0
+  if (!Number.isNaN(companyLat) && !Number.isNaN(companyLon)) {
+    distance = haversineMeters(latitude, longitude, companyLat, companyLon)
+    isWithin = distance <= radius
+  }
+
+  const { data: activeLog } = await db
+    .from('location_logs')
+    .select('id')
+    .eq('student_id', user.id)
+    .eq('attachment_id', attachmentId)
+    .is('check_out_time', null)
+    .limit(1)
+  if ((activeLog ?? []).length) return err(c, 'You already have an active check-in. Please check-out first.', 400)
+
+  const { error } = await db.from('location_logs').insert({
+    student_id: user.id,
+    attachment_id: attachmentId,
+    latitude,
+    longitude,
+    accuracy_meters: body.accuracy_meters != null ? Number(body.accuracy_meters) : null,
+    is_within_geofence: isWithin,
+    location_method: String(body.location_method || 'gps'),
+    device_info: String(body.device_info || ''),
+  })
+  if (error) return err(c, error.message, 400)
+  writeAuditLog(c, 'check_in', `attachment:${attachmentId}`)
+  return ok(c, { checked_in: true, is_within_geofence: isWithin, distance_meters: Math.round(distance) })
+})
+
+mutations.post('/student/check-out', requireRole('student'), async (c) => {
+  const user = c.get('user')
+  const db = getServiceClient(c.env)
+  const body = await bodyJson(c)
+  const attachmentId = String(body.attachment_id || '').trim()
+  if (!attachmentId) return err(c, 'Attachment ID is required.', 400)
+
+  const { data: attachment } = await db
+    .from('industrial_attachments')
+    .select('id')
+    .eq('id', attachmentId)
+    .eq('student_id', user.id)
+    .eq('status', 'active')
+    .maybeSingle()
+  if (!attachment) return err(c, 'Active attachment not found.', 404)
+
+  const { data: logs } = await db
+    .from('location_logs')
+    .select('id')
+    .eq('student_id', user.id)
+    .eq('attachment_id', attachmentId)
+    .is('check_out_time', null)
+    .order('check_in_time', { ascending: false })
+    .limit(1)
+  const open = ((logs ?? []) as Row[])[0]
+  if (!open) return err(c, 'No active check-in found.', 400)
+
+  const { error } = await db
+    .from('location_logs')
+    .update({ check_out_time: nowIso() })
+    .eq('id', open.id as string)
+  if (error) return err(c, error.message, 400)
+  writeAuditLog(c, 'check_out', `attachment:${attachmentId}`)
+  return ok(c, { checked_out: true })
+})
 
 mutations.post('/student/logbook', requireRole('student'), async (c) => {
   const user = c.get('user')
   const db = getServiceClient(c.env)
   const body = await bodyJson(c)
-  const activities = String(body.activities || '').trim()
-  const weekNumber = Number(body.week_number) || 1
-  const attachmentId = String(body.attachment_id || '').trim()
 
-  if (!activities) return err(c, 'Activities description is required.', 400)
+  // New Form fields (Flask logbook/add)
+  const tasksPerformed = String(body.tasks_performed || body.activities || '').trim()
+  const logDate = String(body.log_date || body.entry_date || nowIso().slice(0, 10)).trim()
+  const entryTime = String(body.entry_time || '').trim()
+  const skillsApplied = String(body.skills_applied || '').trim()
+  const challenges = String(body.challenges_encountered || '').trim()
+  const achievements = String(body.achievements || '').trim()
+  const knownSlots = new Set(['08:00-11:00', '11:00-14:00', '14:00-17:00', '17:00-20:00'])
+  const hoursWorked = knownSlots.has(entryTime) ? 3 : body.week_number ? null : null
 
-  let attId = attachmentId
+  if (!tasksPerformed) return err(c, 'Date, time slot, and activity description are required.', 400)
+  if (entryTime && !logDate) return err(c, 'Date, time slot, and activity description are required.', 400)
+
+  let attId = String(body.attachment_id || '').trim()
   if (!attId) {
     const { data: att } = await db
       .from('industrial_attachments')
       .select('id')
       .eq('student_id', user.id)
-      .in('status', ['active', 'approved'])
+      .in('status', ['active', 'approved', 'pending'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -680,23 +991,69 @@ mutations.post('/student/logbook', requireRole('student'), async (c) => {
   }
   if (!attId) return err(c, 'No active attachment found for logbook entry.', 400)
 
-  const { data, error } = await db
-    .from('digital_logbook')
-    .insert({
-      student_id: user.id,
-      attachment_id: attId,
-      week_number: weekNumber,
-      activities,
-      entry_date: String(body.entry_date || nowIso().slice(0, 10)),
-      mentor_approval_status: 'pending',
-    })
-    .select('id')
-    .single()
+  if (entryTime && !knownSlots.has(entryTime) && !body.activities) {
+    return err(c, 'Select a valid 3-hour time slot.', 400)
+  }
+  if (entryTime && !tasksPerformed) {
+    return err(c, 'Date, time slot, and activity description are required.', 400)
+  }
 
-  if (error) return err(c, error.message, 400)
-  writeAuditLog(c, 'add_logbook', `logbook:${(data as Row).id}`)
-  return ok(c, { id: (data as Row).id })
+  const evidencePaths: string[] = []
+  const files = Array.isArray(body.evidence) ? (body.evidence as Row[]) : []
+  for (const file of files) {
+    const fileName = String(file.file_name || '').trim()
+    const b64 = String(file.file_base64 || '').trim()
+    if (!fileName || !b64) continue
+    const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : ''
+    if (
+      !['jpg', 'jpeg', 'png', 'webp', 'pdf', 'mp4', 'mov', 'avi', 'webm', 'mp3', 'wav', 'ogg', 'm4a'].includes(ext)
+    ) {
+      continue
+    }
+    const storagePath = `logbook/${user.id}_${crypto.randomUUID().replace(/-/g, '')}.${ext}`
+    const bytes = decodeBase64Payload(b64)
+    await uploadBytes(db, 'assessment-evidence', storagePath, bytes, String(file.content_type || 'application/octet-stream'))
+    evidencePaths.push(storagePath)
+  }
+
+  // Prefer Flask-shaped insert; fall back to legacy columns if schema drifts
+  const payload: Record<string, unknown> = {
+    student_id: user.id,
+    attachment_id: attId,
+    log_date: logDate,
+    entry_time: entryTime || null,
+    tasks_performed: tasksPerformed,
+    skills_applied: skillsApplied || null,
+    hours_worked: hoursWorked,
+    challenges_encountered: challenges || null,
+    achievements: achievements || null,
+    evidence_urls: evidencePaths.length ? evidencePaths : null,
+    // legacy InteractiveTablePage fields
+    week_number: Number(body.week_number) || null,
+    activities: tasksPerformed,
+    entry_date: logDate,
+    mentor_approval_status: 'pending',
+  }
+
+  let data = { ...payload }
+  for (let i = 0; i < 15; i++) {
+    const { data: row, error } = await db.from('digital_logbook').insert(data).select('id').single()
+    if (!error && row) {
+      writeAuditLog(c, 'add_logbook', `logbook:${(row as Row).id}`)
+      return ok(c, { id: (row as Row).id })
+    }
+    const msg = error?.message || ''
+    const unknownCol = msg.match(/'(\w+)' column/) || msg.match(/Could not find the '(\w+)' column/)
+    if (unknownCol) {
+      delete data[unknownCol[1]]
+      continue
+    }
+    return err(c, msg || 'Could not add logbook entry.', 400)
+  }
+  return err(c, 'Could not add logbook entry.', 400)
 })
+
+/* ── Student employment ──────────────────────────────────────────────────── */
 
 mutations.post('/student/employment-status', requireRole('student'), async (c) => {
   const user = c.get('user')
