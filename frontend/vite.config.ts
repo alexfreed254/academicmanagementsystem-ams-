@@ -28,9 +28,6 @@ export default defineConfig({
   build: {
     target: 'es2020',
     sourcemap: false,
-    // Always start from a clean dist so a restored build-output cache can never
-    // resurrect stale files (e.g. an old _redirects rejected by Workers assets).
-    emptyOutDir: true,
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {

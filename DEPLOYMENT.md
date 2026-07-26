@@ -1,9 +1,5 @@
 # Cloudflare Deployment Guide — TTTI Academic Management System
 
-> **Production topology (current):** one Cloudflare Worker from repo-root `wrangler.jsonc`.
-> SPA + API share the same origin. See `CLOUDFLARE.md` for the short cheat sheet.
-> The older “Pages + separate API Worker” diagrams below are historical — do not deploy that split.
-
 This guide takes the inventoried Flask + React system to the target architecture:
 
 ```
@@ -11,24 +7,15 @@ Users
   ↓
 Cloudflare (DNS · SSL/TLS · CDN · WAF · DDoS)
   ↓
-Cloudflare Worker — React SPA (frontend/dist) + Hono API (workers/src)
-  ├─ /api/*  → Hono   Authorization: Bearer <session JWT>
-  └─ /*      → SPA fallback (index.html)
-  ↓ service-role key (runtime secret)
+Cloudflare Pages  — React + Vite + TypeScript (frontend/)
+  ↓ HTTPS  Authorization: Bearer <session JWT>
+Cloudflare Workers — Hono + TypeScript API (workers/)
+  ↓ service-role key (secret)
 Supabase — PostgreSQL + Auth + Storage + RLS
 ```
 
 Read `MIGRATION_INVENTORY.md` first — it lists every Flask route, table, auth flow,
-and the blockers that keep PDFs / biometrics / Jinja exporters on an optional legacy origin.
-
-**Deploy from repo root only:**
-
-```bash
-npm run deploy          # runs wrangler deploy using root wrangler.jsonc
-# or: npx wrangler deploy
-```
-
-GitHub Actions: `.github/workflows/deploy.yml` (unified). Retired: `deploy-pages.yml`, `deploy-workers.yml`.
+and the blockers that keep PDFs / biometrics / Jinja portals on a legacy origin for now.
 
 ---
 
@@ -48,8 +35,9 @@ GitHub Actions: `.github/workflows/deploy.yml` (unified). Retired: `deploy-pages
 2. Note your **Account ID** (Overview → Account ID) — needed for CI secrets.
 3. Create an API token:
    - My Profile → API Tokens → Create Token
-   - Use the **Edit Cloudflare Workers** template (Pages Edit is not required for the unified Worker)
-   - Zone → Zone Settings / DNS / Zone → Read/Edit (for the custom domain zone)
+   - Use the **Edit Cloudflare Workers** template, and also enable:
+     - Account → Cloudflare Pages → Edit
+     - Zone → Zone Settings / DNS / Zone → Read/Edit (for the custom domain zone)
    - Save the token somewhere safe — it is shown once.
 
 ---
@@ -58,11 +46,7 @@ GitHub Actions: `.github/workflows/deploy.yml` (unified). Retired: `deploy-pages
 
 No schema rewrite is required. Confirm:
 
-1. SQL Editor has applied `supabase_schema.sql` and every `*_migration.sql`,
-   **finishing with `rls_hardening_migration.sql`** (enables RLS on tables that
-   were missing it, removes `USING (true)` policies, and aligns the role CHECK
-   with the application's role list — safe for the running app because the
-   backend uses the service-role key).
+1. SQL Editor has applied `supabase_schema.sql` and every `*_migration.sql`.
 2. Storage buckets exist: `assessment-scripts`, `assessment-evidence`,
    `application-documents`, `trip-media`, `mentoring-tools`.
 3. Auth → Providers → Email enabled.
@@ -76,20 +60,25 @@ enforces RBAC + department isolation in TypeScript (same model as Flask).
 
 ---
 
-## 3. Unified Worker setup (SPA + API)
+## 3. Cloudflare Workers setup (API)
 
 ```bash
-# From repo root
-cp workers/.dev.vars.example workers/.dev.vars
-# Edit workers/.dev.vars with real Supabase keys + a long SESSION_SECRET
-# Generate: openssl rand -hex 32
-
-npm run check          # TypeScript (workers)
-npm run build          # frontend/dist only (optional; wrangler build also runs it)
-npm run deploy         # wrangler deploy — builds SPA then publishes Worker
+cd workers
+npm install
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with real Supabase keys + a long SESSION_SECRET
+# Generate: openssl rand -hex 32   (or  python -c "import secrets;print(secrets.token_hex(32))")
 ```
 
-Set **runtime** secrets on the Worker (dashboard or CLI):
+Local run:
+
+```bash
+npm run check          # TypeScript
+npx wrangler dev       # http://127.0.0.1:8787
+curl http://127.0.0.1:8787/api/health
+```
+
+Production secrets (never in `wrangler.toml`):
 
 ```bash
 npx wrangler secret put SUPABASE_ANON_KEY
@@ -97,44 +86,60 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put SESSION_SECRET
 ```
 
-Verify:
+Non-secret vars — edit `workers/wrangler.toml`:
 
-```bash
-curl https://<your-worker>.workers.dev/api/health
-# ready: true
+```toml
+[vars]
+SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+ALLOWED_ORIGINS = "https://ttti-ams.pages.dev,https://ams.yourdomain.ac.ke"
+ENVIRONMENT = "production"
 ```
 
-Local:
+Deploy:
 
 ```bash
-npm run dev            # wrangler dev at repo root (SPA assets + /api)
+npx wrangler deploy
+# → https://ttti-ams-api.<account>.workers.dev
 ```
 
-> **Do not** deploy `frontend/wrangler.jsonc` or `workers/wrangler.toml` — they are retired.
+Optional custom API domain (after DNS is on Cloudflare):
+
+```toml
+routes = [
+  { pattern = "api.yourdomain.ac.ke", custom_domain = true }
+]
+```
+
+Then redeploy. SSL is automatic (Full / Full strict).
 
 ---
 
-## 3b. Historical note — split Pages + API (obsolete)
+## 4. Cloudflare Pages setup (Frontend)
 
-**Do not** create Cloudflare Pages (`ttti-ams`) plus a separate API Worker (`ttti-ams-api`).
-**Do not** set Workers Builds root directory to `workers/`.
-**Do not** edit or deploy `workers/wrangler.toml` for production.
+### Option A — GitHub automatic (recommended)
 
-Production is one Worker from repo-root `wrangler.jsonc` (`academic-management-system254`):
-SPA assets + Hono API on the same origin. Worker Assets cover the “Pages” role.
+1. Dash → Workers & Pages → Create → Pages → Connect to Git
+2. Select `ACADEMIC-MANAGEMENT-SYSTEM254`
+3. Build settings:
+   - Framework preset: Vite
+   - Root directory: `frontend`
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+4. Environment variables (Production):
+   - `VITE_API_BASE_URL` = `https://ttti-ams-api.<account>.workers.dev`  
+     (or `https://api.yourdomain.ac.ke`)
+   - `VITE_LEGACY_ORIGIN` = URL of the still-running Flask service (PDFs, biometrics, Jinja)
+5. Save and Deploy.
 
-- Leave `VITE_API_BASE_URL` **empty** (same-origin `/api`).
-- Optional `VITE_LEGACY_ORIGIN` only for Excel openpyxl / biometric device host.
-- Runtime secrets on the unified Worker: `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`.
-- From repo root: `npm run deploy` (or empty Build command + Deploy `npx wrangler deploy` — root `wrangler.jsonc` already runs `build.command`).
+SPA routing is covered by `frontend/public/_redirects` (`/* /index.html 200`).
 
-See `CLOUDFLARE.md` and `MIGRATION_INVENTORY.md`.
+### Option B — GitHub Actions (also included)
 
----
+`.github/workflows/deploy-pages.yml` builds and runs
+`wrangler pages deploy frontend/dist --project-name=ttti-ams`.
 
-## 4. Cloudflare Pages setup — obsolete
-
-Skip. Do not connect a Pages project for this app. Use the unified Worker (§3).
+Create the Pages project once (`wrangler pages project create ttti-ams`) if it does
+not already exist, then rely on the workflow.
 
 ---
 
@@ -142,14 +147,14 @@ Skip. Do not connect a Pages project for this app. Use the unified Worker (§3).
 
 | Name | Where | Secret? | Purpose |
 |---|---|---|---|
-| `SUPABASE_URL` | Root `wrangler.jsonc` vars | no | Project URL |
-| `SUPABASE_ANON_KEY` | Worker **runtime** secret | yes | Staff GoTrue login |
-| `SUPABASE_SERVICE_ROLE_KEY` | Worker **runtime** secret | yes | Server DB / Storage |
-| `SESSION_SECRET` | Worker **runtime** secret | yes | Signs session JWTs (HS256) |
-| `ALLOWED_ORIGINS` | Root `wrangler.jsonc` vars | no | CORS allow-list |
-| `ENVIRONMENT` | Root `wrangler.jsonc` vars | no | Label in `/api/health` |
-| `VITE_API_BASE_URL` | Leave empty | no | Same-origin `/api` on unified Worker |
-| `VITE_LEGACY_ORIGIN` | Optional SPA build var | no | Excel / biometric device host only |
+| `SUPABASE_URL` | Worker vars | no | Project URL |
+| `SUPABASE_ANON_KEY` | Worker secret | yes | Staff GoTrue login |
+| `SUPABASE_SERVICE_ROLE_KEY` | Worker secret | yes | Server DB / Storage (bypasses RLS) |
+| `SESSION_SECRET` | Worker secret | yes | Signs session JWTs (HS256) |
+| `ALLOWED_ORIGINS` | Worker vars | no | CORS allow-list (comma-separated) |
+| `ENVIRONMENT` | Worker vars | no | Label in `/api/health` |
+| `VITE_API_BASE_URL` | Pages env / GH var | no | Absolute API origin baked into the SPA |
+| `VITE_LEGACY_ORIGIN` | Pages env / GH var | no | Flask origin for PDF / biometric links |
 | `CLOUDFLARE_API_TOKEN` | GitHub secret | yes | CI deploys |
 | `CLOUDFLARE_ACCOUNT_ID` | GitHub secret | yes | CI deploys |
 
@@ -160,10 +165,11 @@ Frontend must **never** receive the service-role key.
 ## 6. Custom domain, DNS, SSL
 
 1. Add the institute domain to Cloudflare (Add a Site) and switch nameservers.
-2. Workers → `academic-management-system254` → Custom Domains → `ams.yourdomain.ac.ke` (one hostname for SPA + API).
-3. SSL/TLS → Overview → **Full (strict)**. Always Use HTTPS = On.
-4. Update `ALLOWED_ORIGINS` in root `wrangler.jsonc` to include `https://ams.yourdomain.ac.ke` and redeploy.
-5. Optional WAF rate-limiting on `/api/v1/auth/login`.
+2. Pages → Custom domains → `ams.yourdomain.ac.ke` (CNAME to `ttti-ams.pages.dev`).
+3. Workers → Triggers → Custom Domains → `api.yourdomain.ac.ke`.
+4. SSL/TLS → Overview → set mode to **Full (strict)**.
+5. Always Use HTTPS = On. Automatic HTTPS Rewrites = On.
+6. Update Worker `ALLOWED_ORIGINS` to include `https://ams.yourdomain.ac.ke` and redeploy.
 7. Rebuild Pages so `VITE_API_BASE_URL=https://api.yourdomain.ac.ke`.
 
 DNS records Cloudflare will create automatically for Pages/Workers custom domains;

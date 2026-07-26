@@ -31,11 +31,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
 
   const refresh = useCallback(async () => {
+    // Flask container auth uses session cookies (same-origin). Always probe /auth/me.
+    // Bearer token is optional (Hono path).
     try {
       const me = await authApi.fetchMe()
       setUser(me)
       setError(null)
     } catch {
+      setAccessToken(null)
       setUser(null)
     } finally {
       setLoading(false)
@@ -86,7 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authApi.logout()
     } finally {
-      setAccessToken(null)
       setUser(null)
       queryClient.clear()
     }

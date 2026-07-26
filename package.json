@@ -1,15 +1,21 @@
 {
-  "name": "ttti-ams-monorepo",
+  "name": "ttti-ams-cloudflare",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
-    "check": "npm --prefix workers run check",
-    "dev": "npx wrangler dev",
-    "deploy": "npx wrangler deploy",
-    "deploy:frontend": "npm run deploy",
-    "deploy:api": "npm run deploy"
+    "build:frontend": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "dev": "npm run build:frontend && wrangler dev",
+    "deploy": "npm run build:frontend && wrangler deploy",
+    "containers:list": "wrangler containers list",
+    "tail": "wrangler tail",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.0.30"
   },
   "devDependencies": {
-    "wrangler": "^4.86.0"
+    "@cloudflare/workers-types": "^4.20250712.0",
+    "typescript": "~5.7.2",
+    "wrangler": "^4.28.0"
   }
 }

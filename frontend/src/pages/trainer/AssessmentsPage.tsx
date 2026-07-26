@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   fetchAssessments,
   reviewAssessment,
@@ -10,7 +9,7 @@ import {
 } from '@/api/trainer'
 import { PortalShell } from '@/layouts/PortalShell'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
-import { getApiErrorMessage } from '@/lib/apiClient'
+import { getApiErrorMessage, legacyHref } from '@/lib/apiClient'
 
 type Tab = 'dashboard' | 'browse' | 'search'
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected'
@@ -363,9 +362,8 @@ function FileCard({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {marks != null ? (
-            <span className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
-              ★ {marks}/{max}
-              {max ? ` · ${((Number(marks) / Number(max)) * 100).toFixed(1)}%` : ''}
+            <span className="rounded-lg bg-purple-600 px-2 py-1 text-xs font-bold text-white">
+              {marks}/{max}
             </span>
           ) : null}
           <span className={pillClass(status as StatusFilter, false)}>
@@ -392,12 +390,16 @@ function FileCard({
           >
             Return
           </button>
-          <Link
-            to={`/trainer/assessments/${file.id}/review`}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
-          >
-            Full review
-          </Link>
+          {legacyHref(`/trainer/assessment/${file.id}/review`) ? (
+            <a
+              href={legacyHref(`/trainer/assessment/${file.id}/review`) || undefined}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Full review
+            </a>
+          ) : null}
         </div>
       ) : null}
 

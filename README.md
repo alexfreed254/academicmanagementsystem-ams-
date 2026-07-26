@@ -8,37 +8,48 @@ A full-stack web application for managing academic operations at Thika Technical
 
 | Layer | Technology |
 |---|---|
-| Edge app | **One Cloudflare Worker** — React SPA (`frontend/dist`) + Hono API (`workers/`) |
-| Frontend | React 18 + Vite + TypeScript · Tailwind CSS |
-| Backend API | Hono · Zod · TypeScript on Cloudflare Workers |
+| Backend (production today) | Python · Flask · Gunicorn on **Render** |
+| Backend (Cloudflare Phase 1) | Cloudflare Workers · **Hono** · TypeScript (`workers/`) — `/api/v1` SPA contract |
 | Database | Supabase (PostgreSQL + Row Level Security) |
-| Auth | Supabase Auth (JWT) for staff · Werkzeug-compatible hashes for students · **Bearer session JWT** on Workers |
+| Auth | Supabase Auth (JWT) for staff/employers · Werkzeug hashed passwords for students |
 | Storage | Supabase Storage (PDFs, images, evidence files) |
-| Edge | Cloudflare DNS · CDN · SSL/TLS · WAF · DDoS |
-| Legacy (optional) | Flask Jinja / ReportLab PDFs / biometrics via `VITE_LEGACY_ORIGIN` |
+| Frontend | **React 18 + Vite + TypeScript** (`frontend/`) → Cloudflare **Pages** |
+| Legacy UI | Jinja2 portals on Flask (unchanged until each screen is ported) |
+| PDF generation | ReportLab (Flask) · browser-print for Cloudflare |
+| Excel export | openpyxl (Flask until client-side port) |
 
-See [`CLOUDFLARE.md`](CLOUDFLARE.md) for the deploy cheat sheet, [`MIGRATION_INVENTORY.md`](MIGRATION_INVENTORY.md) for the Flask audit, and [`DEPLOYMENT.md`](DEPLOYMENT.md) for secrets and DNS.
+See `MIGRATION_INVENTORY.md` and `DEPLOYMENT.md` for the Cloudflare cutover plan.
+---
 
 ## System Architecture
 
+**Current production (Render + Flask):**
+
 ```
-Users
-  ↓
-Cloudflare (DNS · SSL/TLS · CDN · WAF · DDoS)
-  ↓
-Cloudflare Worker  academic-management-system254
-  ├─ /api/*          → Hono (workers/src)  Authorization: Bearer <session JWT>
-  └─ /*              → React SPA (frontend/dist)
-  ↓
-Supabase — PostgreSQL + Auth + Storage + RLS
-
-Optional legacy (PDF / biometrics only):
-  VITE_LEGACY_ORIGIN ──► Flask host
+Browser
+  │
+  ├─ React + Vite SPA (`frontend/`) ── Axios ──► Flask /api/v1/*  (or Workers in Phase 1)
+  │
+  └─ Legacy Jinja portals (unchanged) ─────────► Flask HTML routes
+         │
+         ▼
+Render (Gunicorn → Flask app)  +  optional Cloudflare Workers API
+  │
+  ├── Supabase Auth  ← login / JWT / password reset
+  ├── Supabase DB    ← all application data (PostgreSQL + RLS)
+  └── Supabase Storage ← uploaded files (PDFs, photos, documents)
 ```
 
-Production source of truth is **repo-root `wrangler.jsonc`**. Do not deploy `frontend/wrangler.jsonc` or `workers/wrangler.toml` — those are retired split-topology leftovers.
+**Target (Cloudflare-native — phased):**
 
-All application data lives in Supabase. The React SPA talks same-origin to `/api/v1/*` on the Worker.
+```
+Users → Cloudflare (DNS/CDN/WAF/DDoS)
+      → Pages (React SPA)
+      → Workers /api/v1 (Hono + Bearer JWT)
+      → Supabase (Postgres + Auth + Storage + RLS)
+```
+
+Flask on Render remains for Jinja portals, ReportLab/Excel, and biometric device endpoints until those phases complete. All data stays in Supabase.
 
 ---
 

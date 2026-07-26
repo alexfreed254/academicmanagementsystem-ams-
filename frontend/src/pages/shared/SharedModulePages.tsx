@@ -7,7 +7,6 @@ import { PortalShell } from '@/layouts/PortalShell'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
 import { InteractiveTablePage, StatusPill, cell } from '@/pages/shared/InteractiveTablePage'
 import { PrintPdfLink } from '@/pages/shared/PrintReportPages'
-import { PrideFooter } from '@/components/PrideFooter'
 import type { Row } from '@/api/portals'
 
 const summativeColumns = [
@@ -64,7 +63,6 @@ export function ClearanceApproverPage() {
           run: (row, comment) => postAction(`/clearance/approvals/${row.id}/reject`, { comments: comment }),
         },
       ]}
-      footer={<PrideFooter showLiveBadge={false} />}
     />
   )
 }
@@ -86,7 +84,6 @@ export function ClearanceStudentPage() {
           Clearance requests appear here once started. Contact your department if a course is missing.
         </span>
       }
-      footer={<PrideFooter showLiveBadge={false} />}
     />
   )
 }
@@ -118,7 +115,6 @@ export function ServiceClearancePage() {
           run: (row, comment) => postAction(`/clearance/approvals/${row.id}/reject`, { comments: comment }),
         },
       ]}
-      footer={<PrideFooter showLiveBadge={false} />}
     />
   )
 }
@@ -128,7 +124,7 @@ export function SummativeHubPage() {
     { to: '/summative/overview', title: 'Overview', sub: 'Competence records', icon: 'th-large', bg: '#eef2ff', color: '#4f46e5' },
     { to: '/summative/entry', title: 'Competence Entry', sub: 'In-portal workspace', icon: 'edit', bg: '#dbeafe', color: '#1d4ed8' },
     { to: '/summative/analysis', title: 'Unit Performance', sub: 'In-portal workspace', icon: 'chart-bar', bg: '#fef3c7', color: '#b45309' },
-    { to: '/summative/reports', title: 'Reports & Downloads', sub: 'Browser print on Cloudflare', icon: 'download', bg: '#dcfce7', color: '#15803d' },
+    { to: '/summative/reports', title: 'Reports & Downloads', sub: 'Worker + optional legacy PDFs', icon: 'download', bg: '#dcfce7', color: '#15803d' },
     { to: '/summative/graduation-list', title: 'Graduation List', sub: 'In-portal workspace', icon: 'user-graduate', bg: '#ede9fe', color: '#6d28d9' },
   ]
   return (
@@ -136,8 +132,8 @@ export function SummativeHubPage() {
       <div style={{ padding: 24 }}>
         <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800 }}>Summative Assessment (TVET CDACC)</h1>
         <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 13 }}>
-          Competence workflows and printable reports run on the Cloudflare Worker SPA. Use Graduation List → Print for
-          browser PDF export.
+          Competence workflows open inside the Cloudflare SPA. PDF/Excel generation still requires an optional Flask
+          legacy host (`VITE_LEGACY_ORIGIN`) until those exporters are ported to Workers.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12 }}>
           {links.map((item) => (
@@ -319,11 +315,8 @@ export function SummativeEntryPage() {
               style={inputStyle}
             >
               <option value="">Select…</option>
-              <option value="mastery">Mastery (M) — 80–100%</option>
-              <option value="proficient">Proficient (P) — 65–79%</option>
-              <option value="competent">Competent (C) — 50–64%</option>
-              <option value="not_yet_competent">Not Yet Competent (NYC) — 0–49%</option>
-              <option value="crnm">CRNM — Course Requirement Not Met</option>
+              <option value="competent">Competent</option>
+              <option value="not_yet_competent">Not yet competent</option>
             </select>
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 12, fontWeight: 600, color: '#475569' }}>
@@ -1103,13 +1096,12 @@ export function BiometricPage() {
       <div style={{ padding: 24 }}>
         <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800 }}>Biometric Attendance</h1>
         <p style={{ margin: '0 0 18px', color: '#64748b', fontSize: 13 }}>
-          Scanner registration and class attendance on Cloudflare. Live BioEntry device POST (`/biometric/api/scan`)
-          still requires an optional Flask device host — Workers cannot hold in-memory enroll sessions.
+          Scanner registration and biometric lesson attendance.
         </p>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24 }}>
           <p style={{ margin: 0, color: '#475569', fontSize: 13 }}>
-            Use manual class attendance on Cloudflare today. Super admins can register scanners under System → Scanner
-            Registration. Device live capture remains on the legacy biometric host until Durable Objects are adopted.
+            Use this portal section to access biometric attendance workflows. Device registration for super admins is under
+            System → Scanner Registration.
           </p>
           <div style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Link to="/trainer/attendance" style={{ fontWeight: 700, color: '#1d4ed8', fontSize: 13 }}>

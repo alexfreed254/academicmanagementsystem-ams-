@@ -1,61 +1,63 @@
-# TTTI AMS — React + Vite Frontend
+# TTTI AMS — React Frontend
 
-Production frontend for the Thika Technical Academic Management System.
-
-## Stack
-
-- React 18 + Vite
-- React Router (lazy route-level code splitting)
-- TanStack Query
-- Axios (**Bearer** session JWT — `withCredentials: false`)
-- Tailwind CSS 4
-- Framer Motion (selective)
-- Chart.js
-- Socket.IO client (opt-in via `VITE_SOCKET_URL`)
+React 18 + Vite + TypeScript SPA. Visual language and portal screens are ported from the Flask Jinja `templates/` folder into `src/pages/`.
 
 ## Architecture
 
 ```
-React + Vite (frontend/)
-  → React Router (lazy portals)
-  → TanStack Query
-  → Axios (`src/lib/apiClient.ts`)  same-origin /api/v1/*
-  → Cloudflare Worker (Hono)        root wrangler.jsonc
-  → Supabase Auth + PostgreSQL + Storage
+Browser (this SPA on Cloudflare Pages)
+  → Authorization: Bearer <session JWT>
+Cloudflare Worker (workers/)  /api/v1/*
+  → Supabase (Postgres + Auth + Storage + RLS)
 ```
 
-Production is **one Worker** that serves this SPA from `frontend/dist` and the
-API from `workers/src`. Leave `VITE_API_BASE_URL` empty. Optional
-`VITE_LEGACY_ORIGIN` points PDF/biometric exports at a Flask host only.
+Legacy Flask remains optional (`VITE_LEGACY_ORIGIN`) for biometric device UI and any remaining ReportLab/Excel downloads.
 
-Do **not** deploy `frontend/wrangler.jsonc` — it is retired (static-only leftover).
+## Template → React mapping
+
+| Jinja (`templates/`) | React (`src/pages/`) |
+|---|---|
+| `main/` | `main/` — landing, about, apply, contact |
+| `auth/` | `auth/` — login, forgot/change password, student register |
+| `super_admin/` | `super_admin/` + `shared/AdminMenuPages.tsx` |
+| `dept_admin/` | `dept_admin/` + shared admin/role menus |
+| `trainer/` | `trainer/` + `StudentTrainerMenuPages.tsx` |
+| `student/` | `student/` + detail/upload pages |
+| `clearance/` | `shared/ClearanceDetailPages.tsx` + shared modules |
+| `examination_officer/`, `industry_mentor/`, `internal_verifier/`, `liaison_officer/`, `cdacc_verifier/`, `workshop_technician/`, `service_dept/`, `admin_oversight/` | Matching role dashboard folders + `shared/RoleMenuPages.tsx` |
+| PDF print HTML | `shared/PrintReportPages.tsx` (browser print) |
+| `notifications/`, profile | `shared/NotificationsPage.tsx`, `ProfilePage.tsx` |
+
+Portal chrome (sidebar/topbar) lives in `layouts/PortalShell.tsx` with CSS from `styles/portal-*.css` (ported from Jinja/`static/css`).
 
 ## Local development
 
-1. Worker API + SPA assets (repo root):
-
 ```bash
-cp workers/.dev.vars.example workers/.dev.vars
-npm run dev          # wrangler dev — http://127.0.0.1:8787
+# Terminal 1 — API Worker
+cd ../workers
+cp .dev.vars.example .dev.vars   # fill Supabase + SESSION_SECRET
+npm ci && npx wrangler dev       # http://127.0.0.1:8787
+
+# Terminal 2 — SPA
+npm ci
+npm run dev                      # http://localhost:5173  (/api → Worker)
 ```
 
-2. Or Vite-only with API proxy (this folder):
+Optional: hit Flask instead of the Worker with `VITE_DEV_PROXY=http://127.0.0.1:5000`.
 
-```bash
-npm install
-npm run dev          # proxies /api → http://127.0.0.1:8787 (see vite.config.ts)
-```
+## Environment
 
-## Build
-
-```bash
-npm run build        # output: ./dist  (root wrangler assets.directory)
-```
-
-## Env
+See `.env.example`:
 
 | Variable | Purpose |
 |---|---|
-| `VITE_API_BASE_URL` | Leave empty for same-origin Worker `/api` |
-| `VITE_LEGACY_ORIGIN` | Optional Flask origin for PDF / biometric links |
-| `VITE_SOCKET_URL` | Optional realtime (off by default) |
+| `VITE_API_BASE_URL` | Worker URL in production; empty in local Vite (proxy) |
+| `VITE_LEGACY_ORIGIN` | Optional Flask origin for biometric / binary PDF / Excel |
+
+## Build / deploy
+
+```bash
+npm run build    # → dist/
+```
+
+Cloudflare Pages: see root `DEPLOYMENT.md` and `.github/workflows/deploy-pages.yml`.

@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "echo Use npm run dev from the repo root && exit 1",
-    "deploy": "echo Do not deploy workers/wrangler.toml. Use npm run deploy from the repo root. && exit 1",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
     "check": "tsc --noEmit",
-    "tail": "wrangler tail --config ../wrangler.jsonc"
+    "tail": "wrangler tail"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

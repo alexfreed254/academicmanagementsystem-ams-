@@ -1,38 +1,19 @@
-# TTTI AMS API — Cloudflare Worker (Hono)
+# TTTI AMS API — Cloudflare Worker
 
-Hono + TypeScript backend for `/api/v1/*`. In production this source is bundled
-by the **repo-root** `wrangler.jsonc` together with the React SPA — not as a
-standalone `ttti-ams-api` Worker.
+Hono + TypeScript backend that replaces the Flask `/api/v1` JSON API.
 
 ```
-Browser  --same origin-->  Cloudflare Worker
-  /api/*  → this Hono app (Bearer JWT)  →  Supabase
-  /*      → frontend/dist SPA
+Pages (React)  --Bearer JWT-->  this Worker  -->  Supabase
 ```
 
 ## Quick start
 
-Prefer the monorepo root:
-
 ```bash
-# repo root
-cp workers/.dev.vars.example workers/.dev.vars
-npm run check
-npm run dev              # wrangler.dev from root wrangler.jsonc
-npm run deploy
-```
-
-API-only local (optional):
-
-```bash
-cd workers
 npm install
-cp .dev.vars.example .dev.vars
+cp .dev.vars.example .dev.vars   # fill in Supabase keys + SESSION_SECRET
 npm run check
-npx wrangler dev --config ../wrangler.jsonc   # use root config
+npx wrangler dev                 # http://127.0.0.1:8787
 ```
-
-`workers/wrangler.toml` is **retired** (split-topology leftover). Do not deploy it.
 
 ## Layout
 
@@ -41,15 +22,12 @@ src/
   index.ts              # Hono app, CORS, health
   types.ts              # Env, SessionUser, roles
   schemas.ts            # Zod validators
-  middleware/auth.ts    # requireAuth / requireRole
+  middleware/auth.ts    # requireAuth / requireRole / deptIsolationCheck
   lib/                  # supabase, session JWT, passwords, audit, dates, transcript
-  routes/               # auth, notifications, trainer, student, admin, roles, shared
+  routes/               # auth, notifications, trainer, student
 ```
 
-## Runtime secrets
+## Deploy
 
-Set on the unified Worker (dashboard or `wrangler secret put` from repo root):
-
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SESSION_SECRET`
+See the root [`DEPLOYMENT.md`](../DEPLOYMENT.md). Secrets go through
+`wrangler secret put` — never commit `.dev.vars`.

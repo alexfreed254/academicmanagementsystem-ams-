@@ -1244,13 +1244,9 @@ mutations.post('/summative/entry', requireAuth, async (c) => {
   const body = await bodyJson(c)
   const studentId = String(body.student_id || '').trim()
   const unitId = String(body.unit_id || '').trim()
-  const competence = String(body.competence || '').trim().toLowerCase()
-  const allowed = new Set(['mastery', 'proficient', 'competent', 'not_yet_competent', 'crnm'])
+  const competence = String(body.competence || '').trim()
   if (!studentId || !unitId || !competence) {
     return err(c, 'Student, unit and competence are required.', 400)
-  }
-  if (!allowed.has(competence)) {
-    return err(c, 'Invalid competence. Use mastery, proficient, competent, not_yet_competent, or crnm.', 400)
   }
 
   const { data, error } = await db

@@ -46,7 +46,6 @@ export function InteractiveTablePage({
   createLabel = 'Add',
   keepSearch = true,
   extraHeader,
-  footer,
 }: {
   title: string
   subtitle?: string
@@ -68,7 +67,6 @@ export function InteractiveTablePage({
   createLabel?: string
   keepSearch?: boolean
   extraHeader?: ReactNode
-  footer?: ReactNode
 }) {
   const [params] = useSearchParams()
   const qs = keepSearch ? params.toString() : ''
@@ -392,7 +390,6 @@ export function InteractiveTablePage({
           )}
         </div>
       </div>
-      {footer}
     </PortalShell>
   )
 }

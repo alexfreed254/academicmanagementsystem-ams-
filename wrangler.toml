@@ -1,0 +1,46 @@
+# TTTI AMS — single Cloudflare project
+# React static assets (Worker Assets) + Flask in Cloudflare Containers
+# Worker routes /api/* (and biometric/static) → container; everything else → SPA.
+
+name = "ttti-ams"
+main = "src/index.ts"
+compatibility_date = "2026-07-12"
+compatibility_flags = ["nodejs_compat"]
+
+# ── React SPA (build frontend first: cd frontend && npm run build) ───────────
+[assets]
+directory = "./frontend/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# Ensure /api hits the Worker (container proxy) instead of looking for a static file
+run_worker_first = ["/api/*", "/biometric/*", "/static/*"]
+
+# ── Flask container (Dockerfile at repo root) ───────────────────────────────────
+[[containers]]
+class_name = "FlaskContainer"
+image = "./Dockerfile"
+max_instances = 3
+# lite | basic | standard — see Cloudflare Containers pricing / limits
+instance_type = "basic"
+
+# Required: each container is owned by a Durable Object
+[[durable_objects.bindings]]
+name = "FLASK_CONTAINER"
+class_name = "FlaskContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FlaskContainer"]
+
+[observability]
+enabled = true
+
+# Non-secret container/Worker vars (secrets via `wrangler secret put`)
+[vars]
+FLASK_ENV = "production"
+# Same-origin SPA: Worker hostname is the only origin (cookies work)
+SPA_ORIGINS = "https://ttti-ams.<your-subdomain>.workers.dev"
+SPA_CROSS_SITE = "false"
+
+# Optional custom domain after DNS is on Cloudflare:
+# routes = [{ pattern = "ams.yourdomain.ac.ke", custom_domain = true }]

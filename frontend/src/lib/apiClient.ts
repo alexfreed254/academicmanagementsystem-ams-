@@ -1,5 +1,9 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios'
 
+/**
+ * Same-origin by default (Cloudflare Worker Assets + Flask Container).
+ * Set VITE_API_BASE_URL only if the API is on a different host.
+ */
 const baseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || ''
 
 export const TOKEN_KEY = 'ttti_access_token'
@@ -7,19 +11,52 @@ export const TOKEN_KEY = 'ttti_access_token'
 export const api: AxiosInstance = axios.create({
   baseURL,
   timeout: 30000,
-  // Same-origin SPA + API on one Worker: leave VITE_API_BASE_URL empty.
-  // Bearer JWT in sessionStorage — no cookies required.
-  withCredentials: false,
+  // Flask /api/v1 uses session cookies + CSRF (unmodified Flask in the container).
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
   },
 })
 
-api.interceptors.request.use((config) => {
+let csrfToken: string | null = null
+let csrfPromise: Promise<string> | null = null
+
+async function ensureCsrfToken(): Promise<string> {
+  if (csrfToken) return csrfToken
+  if (!csrfPromise) {
+    csrfPromise = api
+      .get('/api/v1/csrf-token')
+      .then((res) => {
+        const body = res.data as { data?: { csrf_token?: string }; csrf_token?: string }
+        csrfToken = body?.data?.csrf_token || body?.csrf_token || ''
+        return csrfToken
+      })
+      .finally(() => {
+        csrfPromise = null
+      })
+  }
+  return csrfPromise
+}
+
+api.interceptors.request.use(async (config) => {
+  // Optional Bearer (Hono Workers path). Flask ignores unknown Authorization.
   const token = sessionStorage.getItem(TOKEN_KEY)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+
+  const method = (config.method || 'get').toLowerCase()
+  if (['post', 'put', 'patch', 'delete'].includes(method)) {
+    const url = String(config.url || '')
+    if (!url.includes('/csrf-token')) {
+      try {
+        const csrf = await ensureCsrfToken()
+        if (csrf) config.headers['X-CSRFToken'] = csrf
+      } catch {
+        // Flask will reject if CSRF is required and missing
+      }
+    }
   }
   return config
 })
@@ -45,6 +82,10 @@ export function setAccessToken(token: string | null) {
   else sessionStorage.removeItem(TOKEN_KEY)
 }
 
+export function getAccessToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY)
+}
+
 export function getApiErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.') {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as { error?: string } | undefined
@@ -56,11 +97,7 @@ export function getApiErrorMessage(error: unknown, fallback = 'Something went wr
   return fallback
 }
 
-/**
- * Optional absolute URL for Flask-only leftovers (Excel openpyxl, biometric
- * device POST). Prefer Cloudflare SPA print routes (`/.../print`) instead.
- * Returns null when VITE_LEGACY_ORIGIN is unset.
- */
+/** Absolute URL for leftover Flask-only surfaces when API is not same-origin. */
 export function legacyHref(path: string): string | null {
   const base = (import.meta.env.VITE_LEGACY_ORIGIN as string | undefined)?.replace(/\/$/, '') || ''
   if (!base) return null
