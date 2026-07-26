@@ -84,7 +84,7 @@ Edit `wrangler.toml` `[vars].SPA_ORIGINS` to your final Worker/custom domain
 (comma-separated if you have more than one), e.g.:
 
 ```toml
-SPA_ORIGINS = "https://ttti-ams.<ACCOUNT_SUBDOMAIN>.workers.dev"
+SPA_ORIGINS = "https://academic-management-system-254.<ACCOUNT_SUBDOMAIN>.workers.dev"
 ```
 
 ### D. Local build & test (Docker required)

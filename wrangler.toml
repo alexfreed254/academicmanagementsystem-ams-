@@ -6,7 +6,7 @@
 #
 # React (frontend/) is an optional SPA experiment at /spa — not the live portals.
 
-name = "ttti-ams"
+name = "academic-management-system-254"
 main = "src/index.ts"
 compatibility_date = "2026-07-12"
 compatibility_flags = ["nodejs_compat"]
@@ -38,7 +38,7 @@ enabled = true
 
 [vars]
 FLASK_ENV = "production"
-SPA_ORIGINS = "https://ttti-ams.<your-subdomain>.workers.dev"
+SPA_ORIGINS = "https://academic-management-system-254.<your-subdomain>.workers.dev"
 SPA_CROSS_SITE = "false"
 
 # Optional custom domain after DNS is on Cloudflare:
