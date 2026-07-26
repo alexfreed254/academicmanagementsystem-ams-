@@ -19,5 +19,3 @@ workers/node_modules/
 workers/.wrangler/
 workers/.dev.vars
 workers/dist/
-node_modules/
-.wrangler/

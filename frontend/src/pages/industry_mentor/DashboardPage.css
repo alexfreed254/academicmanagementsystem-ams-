@@ -1,8 +1,0 @@
-/* Ported verbatim from templates/industry_mentor/dashboard_enhanced.html */
-.im-dashboard .stat-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.im-dashboard .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}

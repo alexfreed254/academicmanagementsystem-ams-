@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { fetchStudentMarks } from '@/api/student'
 import { PortalShell } from '@/layouts/PortalShell'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
-import { getApiErrorMessage, legacyHref } from '@/lib/apiClient'
+import { getApiErrorMessage } from '@/lib/apiClient'
 
 const YEARS = Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 2 + i)
 
@@ -96,24 +96,13 @@ export default function StudentMarksPage() {
               <option value="3">Term 3</option>
             </select>
           </label>
-          {legacyHref(`/student/marks/download-result-slip?year=${year}${term ? `&term=${term}` : ''}`) ? (
-            <a
-              href={legacyHref(`/student/marks/download-result-slip?year=${year}${term ? `&term=${term}` : ''}`) || undefined}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-[9px] px-5 py-2.5 text-[13px] font-bold text-white"
-              style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <i className="fas fa-file-pdf" /> Download Transcript
-            </a>
-          ) : (
-            <span
-              className="ml-auto inline-flex items-center gap-1.5 rounded-[9px] px-5 py-2.5 text-[13px] font-bold text-slate-400"
-              title="Set VITE_LEGACY_ORIGIN to enable PDF transcript export"
-            >
-              <i className="fas fa-file-pdf" /> Transcript (legacy host)
-            </span>
-          )}
+          <a
+            href={`/student/marks/download-result-slip?year=${year}${term ? `&term=${term}` : ''}`}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-[9px] px-5 py-2.5 text-[13px] font-bold text-white"
+            style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}
+          >
+            <i className="fas fa-file-pdf" /> Download Transcript
+          </a>
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-3.5 md:grid-cols-4">

@@ -1,8 +1,0 @@
-/* Ported verbatim from templates/internal_verifier/dashboard_enhanced.html */
-.iv-dashboard .stat-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.iv-dashboard .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}

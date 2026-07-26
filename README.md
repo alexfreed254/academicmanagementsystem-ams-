@@ -8,52 +8,37 @@ A full-stack web application for managing academic operations at Thika Technical
 
 | Layer | Technology |
 |---|---|
-| Frontend (cutover) | **React 18 + Vite + TypeScript** (`frontend/`) → Cloudflare **Pages** (`ttti-ams`) |
-| Backend API (cutover) | Cloudflare **Workers** · **Hono** · TypeScript (`workers/`) → Worker `ttti-ams-api` |
-| Auth (SPA) | `Authorization: Bearer <session JWT>` (`SESSION_SECRET` on Worker) |
+| Backend | Python 3.14 · Flask · Gunicorn |
 | Database | Supabase (PostgreSQL + Row Level Security) |
-| Auth providers | Supabase Auth (staff) · Werkzeug hashes (students, verified in Worker) |
-| Storage | Supabase Storage (PDFs, images, evidence) |
-| Legacy host | Flask · Gunicorn on **Render** (PDF / Excel / biometric device until ported) |
-| PDF / Excel | Browser-print via Workers `/print/*` · ReportLab/openpyxl on Flask legacy |
-
-See `MIGRATION_INVENTORY.md` and `DEPLOYMENT.md` for cutover steps.
+| Auth | Supabase Auth (JWT) for staff/employers · bcrypt hashed passwords for students |
+| Storage | Supabase Storage (PDFs, images, evidence files) |
+| Hosting | Render (Python web service, auto-deploy from GitHub) |
+| Frontend | **React 18 + Vite** (SPA in `frontend/`) · Jinja2 portals still available during incremental migration · Tailwind CSS · Font Awesome |
+| PDF generation | ReportLab |
+| Excel export | openpyxl |
 
 ---
 
 ## System Architecture
 
-**Cloudflare cutover path (approved):**
-
 ```
-Users
-  ↓
-Cloudflare Worker  academic-management-system-254
-  ├─ /*       → React SPA (Worker Assets from frontend/dist)
-  └─ /api/*   → Hono API (workers/) → Supabase
-```
-
-Open the **workers.dev** URL (or custom domain) for the website.
-`/api/health` and `/api/v1/*` are JSON API only.
-
-Optional separate Pages project (`ttti-ams`) can still host the SPA; same-origin
-Worker Assets is the path that makes one URL show the website.
-
-| Layer | Path | Role |
-|---|---|---|
-| SPA UI | `frontend/` → built to `frontend/dist` | Portals (React) |
-| API | `workers/` | Hono `/api/v1` |
-| Deploy | root `npm run deploy` | Build SPA + `wrangler deploy` |
-| Builds guide | `CLOUDFLARE_BUILDS.md` | Dashboard deploy command |
-
-Local:
-
-```bash
-npm run build:frontend
-npx wrangler dev    # :8787 — site + /api
+Browser
+  │
+  ├─ React + Vite SPA (`frontend/`) ── Axios ──► Flask /api/v1/*
+  │
+  └─ Legacy Jinja portals (unchanged) ─────────► Flask HTML routes
+         │
+         ▼
+Render (Gunicorn → Flask app)
+  │
+  ├── Supabase Auth  ← login / JWT / password reset
+  ├── Supabase DB    ← all application data (PostgreSQL + RLS)
+  └── Supabase Storage ← uploaded files (PDFs, photos, documents)
 ```
 
-Production: set Cloudflare Deploy command to `npm run deploy` (see `CLOUDFLARE_BUILDS.md`).
+All data lives in Supabase. Render hosts the Python API. The React frontend is deployed separately (static hosting) and talks to Flask over `/api/v1`. See `frontend/README.md`.
+
+Jinja templates remain until each screen is ported — **design is preserved**, only the frontend language changes.
 
 ---
 
@@ -79,8 +64,8 @@ Production: set Cloudflare Deploy command to `npm run deploy` (see `CLOUDFLARE_B
 | Biometric scanner | `/biometric` | Fingerprint sensor API endpoint for classroom attendance |
 
 Access control is enforced at two layers:
-1. **Workers RBAC** (`middleware/auth.ts` + `middleware/rbac.ts`) — role + department checks before queries
-2. **Supabase RLS** — row-level policies on tables (defence in depth; Worker uses service-role)
+1. **Python decorators** — role check before any query runs
+2. **Supabase RLS** — row-level policies on every table (department isolation at DB level)
 
 ---
 

@@ -1,11 +1,4 @@
 @import "tailwindcss";
-/*
- * Verbatim port of static/css/base.css — the Jinja portal design system.
- * Loaded into Tailwind's `components` layer so it outranks preflight but still
- * loses ties to utilities, matching how base.css and the Tailwind CDN stack in
- * the Jinja templates.
- */
-@import "./styles/portal-base.css" layer(components);
 
 /* Existing TTTI design tokens — keep visual language identical to Jinja portals */
 :root {
