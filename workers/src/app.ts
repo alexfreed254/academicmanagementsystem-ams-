@@ -53,6 +53,21 @@ app.use('*', async (c, next) => {
   return handler(c, next)
 })
 
+app.get('/', (c) =>
+  c.json({
+    ok: true,
+    service: 'ttti-ams-api',
+    message: 'Hono API Worker — UI is on Cloudflare Pages (ttti-ams).',
+    health: '/api/health',
+    api_base: '/api/v1',
+    examples: {
+      health: 'GET /api/health',
+      login: 'POST /api/v1/auth/login',
+      me: 'GET /api/v1/auth/me',
+    },
+  }),
+)
+
 app.get('/api/health', (c) => {
   const secrets = envStatus(c.env)
   const ready = Object.values(secrets).every(Boolean)
@@ -78,7 +93,14 @@ api.route('/', publicRoutes)
 api.route('/', printRoutes)
 app.route('/api/v1', api)
 
-app.notFound((c) => err(c, 'Not found.', 404, 'not_found'))
+app.notFound((c) =>
+  err(
+    c,
+    `Not found: ${c.req.method} ${new URL(c.req.url).pathname}. Try GET / or GET /api/health.`,
+    404,
+    'not_found',
+  ),
+)
 registerErrorHandler(app)
 
 export { ConfigError }
