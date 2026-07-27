@@ -42,12 +42,3 @@ export function rateLimiter(options: RateLimitOptions) {
   };
 }
 
-// Cleanup old entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, record] of store.entries()) {
-    if (now > record.resetAt) {
-      store.delete(key);
-    }
-  }
-}, 600000);

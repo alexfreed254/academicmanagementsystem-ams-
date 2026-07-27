@@ -49,6 +49,4 @@ vars = { ENVIRONMENT = "staging" }
 [observability]
 enabled = true
 
-# Limits
-[limits]
-cpu_ms = 50
+

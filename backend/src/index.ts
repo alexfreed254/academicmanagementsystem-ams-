@@ -53,8 +53,8 @@ app.use('*', cors({
     const allowed = [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
-      'https://ttti-ams.pages.dev', // Cloudflare Pages staging
-      'https://ams.ttti.ac.ke', // Production domain
+      'https://ttti-ams-frontend.pages.dev',
+      'https://1cd16e19.ttti-ams-frontend.pages.dev',
     ];
     return allowed.includes(origin) ? origin : allowed[0];
   },
