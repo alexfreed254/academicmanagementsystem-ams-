@@ -1,0 +1,11 @@
+# Cloudflare Pages configuration for TTTI AMS Frontend
+
+name = "ttti-ams-frontend"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "dist"
+
+# Environment variables are set in Cloudflare Pages dashboard
+# These are just references for documentation:
+# - VITE_API_BASE_URL
+# - VITE_SUPABASE_URL
+# - VITE_SUPABASE_ANON_KEY
