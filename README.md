@@ -42,9 +42,39 @@ A modern full-stack web application for managing academic operations at Thika Te
 │   ├── package.json
 │   └── vite.config.ts
 │
-├── .env.example               # Environment variables template
-├── README.md                  # This file
-└── MIGRATION_GUIDE.md         # Migration documentation
+├── old-flask-archive/          # Archived Flask files (reference)
+├── .github/workflows/          # CI/CD pipelines
+├── README.md                   # This file
+├── QUICK_START.md              # Get running in <10 minutes
+├── MIGRATION_GUIDE.md          # Migration documentation
+├── IMPLEMENTATION_STATUS.md    # Current progress tracking
+└── DEPLOYMENT_INSTRUCTIONS.md  # Production deployment guide
+```
+
+---
+
+## 🚀 Quick Start
+
+See **[QUICK_START.md](./QUICK_START.md)** for detailed setup instructions.
+
+```bash
+# 1. Clone repository
+git clone https://github.com/alexfreed254/academicmanagementsystem-ams-.git
+cd academicmanagementsystem-ams-
+
+# 2. Backend setup
+cd backend
+npm install
+cp .env.example .env
+# Edit .env with your Supabase credentials
+npm run dev  # http://localhost:8787
+
+# 3. Frontend setup (new terminal)
+cd frontend
+npm install
+cp .env.example .env
+# Edit .env with your API URL
+npm run dev  # http://localhost:5173
 ```
 
 ---
@@ -52,196 +82,107 @@ A modern full-stack web application for managing academic operations at Thika Te
 ## 🎯 System Features
 
 ### 16 User Roles
-- **super_admin** - Full system access
-- **dept_admin** - Department management
-- **trainer** - Attendance, assessments, marks
-- **student** - View records, upload POE, exam booking
-- **examination_officer** - Exam approvals
-- **industry_mentor** - Attachment supervision
-- **internal_verifier** - Competency verification
-- **liaison_officer** - Attachment coordination
-- **cdacc_verifier** - External assessment verification
-- **workshop_technician** - Equipment management
-- **registrar** - Enrollment oversight
-- **deputy_principal** - Academic oversight
-- **quality_assurance_officer** - Quality monitoring
-- **service_clearance_officer** - Service dept clearances
-- **library_hod** / **sports_hod** - Specialized clearances
-- **Biometric scanner** - Hardware integration
+- super_admin, dept_admin, trainer, student, examination_officer
+- industry_mentor, internal_verifier, liaison_officer, cdacc_verifier
+- workshop_technician, registrar, deputy_principal, quality_assurance_officer
+- library_hod, sports_hod, service_clearance_officer
 
 ### Core Modules
-- **Attendance Management** - Biometric + manual marking, GPS tracking
-- **Assessment Management** - Portfolio of Evidence (POE) uploads and review
-- **Marks Entry & Tracking** - Formative and summative assessments
+- **Attendance Management** - Biometric + manual, GPS tracking
+- **Assessment Management** - POE uploads and review
+- **Marks Entry & Tracking** - Formative and summative
 - **Exam Booking** - Multi-stage approval workflow
-- **Student Clearance** - 2-stage parallel + sequential clearance process
+- **Student Clearance** - 2-stage parallel + sequential
 - **Industrial Attachment** - Company placements, logbook, competencies
-- **Employment Tracking** - TVET graduate employment status
+- **Employment Tracking** - TVET graduate status
 - **Notifications** - Real-time in-app notifications
-- **Audit Logging** - Complete system activity tracking
-- **Multi-Department** - Full department isolation with RLS
+- **Audit Logging** - Complete activity tracking
 
 ---
 
-## 🛠️ Installation & Setup
+## 📚 Documentation
 
-### Prerequisites
-- Node.js 18+ and npm
-- Cloudflare account (free tier works)
-- Supabase project
-- Git
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/alexfreed254/academicmanagementsystem-ams-.git
-cd academicmanagementsystem-ams-
-```
-
-### 2. Backend Setup
-```bash
-cd backend
-npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Edit .env with your Supabase credentials and secrets
-# SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
-# JWT_SECRET (min 32 chars), CSRF_SECRET (min 32 chars)
-
-# Start development server
-npm run dev
-# Backend runs on http://localhost:8787
-```
-
-### 3. Frontend Setup
-```bash
-cd frontend
-npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Edit .env
-# VITE_API_BASE_URL=http://localhost:8787
-# VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
-
-# Start development server
-npm run dev
-# Frontend runs on http://localhost:5173
-```
-
-### 4. Database Setup
-1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Run the SQL schema (if you have `supabase_schema.sql`)
-3. Create Storage buckets:
-   - `assessment-scripts`
-   - `assessment-evidence`
-   - `documents`
-   - `application-documents`
-4. Set up RLS policies (Row Level Security)
-
-### 5. Initial Super Admin
-```sql
--- In Supabase SQL Editor, create a super admin user
--- First create the user in Auth > Users, then:
-INSERT INTO user_profiles (id, full_name, role, is_active)
-VALUES ('UUID-FROM-AUTH', 'Super Admin', 'super_admin', TRUE)
-ON CONFLICT (id) DO UPDATE SET role = 'super_admin', is_active = TRUE;
-```
+- 📖 **[QUICK_START.md](./QUICK_START.md)** - Get running in under 10 minutes
+- 📖 **[MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md)** - Detailed 17-week migration roadmap
+- 📖 **[IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)** - Current progress (25% complete)
+- 📖 **[DEPLOYMENT_INSTRUCTIONS.md](./DEPLOYMENT_INSTRUCTIONS.md)** - Production deployment guide
+- 📖 **[backend/README.md](./backend/README.md)** - Backend-specific documentation
 
 ---
 
 ## 🚢 Deployment
 
 ### Backend (Cloudflare Workers)
+
 ```bash
 cd backend
-
-# Login to Cloudflare (first time only)
-npx wrangler login
-
-# Create KV namespace for sessions
-npx wrangler kv:namespace create SESSIONS
-
-# Update wrangler.toml with the namespace ID
-
-# Set secrets
-npx wrangler secret put SUPABASE_URL
-npx wrangler secret put SUPABASE_ANON_KEY
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-npx wrangler secret put JWT_SECRET
-npx wrangler secret put CSRF_SECRET
-
-# Deploy
+wrangler login
 npm run deploy:production
 ```
 
 ### Frontend (Cloudflare Pages)
+
 ```bash
 cd frontend
-
-# Build
 npm run build
-
-# Deploy (first time - follow prompts to connect Git)
-npx wrangler pages deploy dist --project-name ttti-ams
-
-# Or via GitHub Actions (automatic on push)
-# See .github/workflows/deploy.yml
+npm run deploy
 ```
+
+See **[DEPLOYMENT_INSTRUCTIONS.md](./DEPLOYMENT_INSTRUCTIONS.md)** for complete deployment guide including:
+- Environment setup
+- Secret management
+- Custom domains
+- CI/CD configuration
+- Monitoring & rollback
 
 ---
 
 ## 🔒 Security
 
-- **Authentication**: Dual system (Staff: Supabase JWT | Students: bcrypt password hash)
-- **Authorization**: Role-based access control (RBAC) with 16 roles
-- **Row Level Security**: Database-level access control via Supabase RLS
-- **CSRF Protection**: Token-based CSRF prevention on all mutations
-- **Rate Limiting**: 5 req/min on auth, 100 req/min on general API
+- **Authentication**: Dual system (Staff: Supabase JWT | Students: bcrypt)
+- **Authorization**: RBAC with 16 roles
+- **Row Level Security**: Database-level via Supabase RLS
+- **CSRF Protection**: Token-based on all mutations
+- **Rate Limiting**: 5 req/min auth, 100 req/min general
 - **Secure Cookies**: HttpOnly, Secure, SameSite
-- **Audit Logging**: All significant actions logged to `system_logs`
-- **Input Validation**: Zod schemas on all inputs
-- **File Upload Security**: Type and size validation
+- **Audit Logging**: All actions logged
+- **Input Validation**: Zod schemas
 
 ---
 
 ## 📊 Performance
 
-- **Edge Computing**: API runs on Cloudflare's global network (275+ cities)
+- **Edge Computing**: Runs on Cloudflare's 275+ city network
 - **Response Times**: Sub-50ms typical
 - **Scalability**: Auto-scaling, handles millions of requests
+- **Zero Cold Starts**: Instant response, always
 - **CDN**: Static assets cached globally
-- **Database**: Supabase with connection pooling
-- **Storage**: Supabase Storage with CDN
 
 ---
 
-## 📖 API Documentation
+## 🗂️ Migration Status
 
-### Authentication
-- `POST /api/auth/login` - Login (staff or student)
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Get current user
+**Current Progress: 25%**
 
-### Student
-- `GET /api/student/dashboard` - Dashboard data
-- `GET /api/student/attendance` - Attendance records
-- `GET /api/student/marks` - Marks/grades
-- `POST /api/student/assessments` - Upload assessment
+✅ **Complete:**
+- Infrastructure (100%)
+- Authentication (100%)
+- Documentation (100%)
 
-### Trainer
-- `GET /api/trainer/dashboard` - Dashboard data
-- `POST /api/trainer/attendance` - Mark attendance
-- `GET /api/trainer/assessments` - Student assessments
-- `POST /api/trainer/marks-entry/save-mark` - Save mark
+⏳ **In Progress:**
+- Backend API Routes (5%)
+- Frontend Pages (10%)
 
-[See MIGRATION_GUIDE.md for complete API reference]
+🔜 **Upcoming:**
+- Complex workflows
+- Testing
+- Production deployment
+
+See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) for detailed tracking.
 
 ---
 
-## 🧪 Testing
+## 🧪 Development
 
 ```bash
 # Backend tests
@@ -252,9 +193,19 @@ npm test
 cd frontend
 npm test
 
-# E2E tests
-npm run test:e2e
+# Type checking
+npm run type-check
 ```
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/new-feature`
+3. Commit changes: `git commit -m 'Add new feature'`
+4. Push to branch: `git push origin feature/new-feature`
+5. Open a Pull Request
 
 ---
 
@@ -264,40 +215,22 @@ Proprietary - Thika Technical Training Institute
 
 ---
 
-## 👥 Contributors
-
-- Development Team - Thika Technical Training Institute
-- Migration to Cloudflare - 2025
-
----
-
 ## 📞 Support
 
-For issues, questions, or feature requests:
-- Create an issue on GitHub
-- Contact IT Department: [email protected]
-- Documentation: See `/docs` folder
+- **Repository**: https://github.com/alexfreed254/academicmanagementsystem-ams-
+- **Issues**: https://github.com/alexfreed254/academicmanagementsystem-ams-/issues
+- **Documentation**: See `/docs` folder and markdown files in root
 
 ---
 
-## 🗺️ Roadmap
+## 🎉 Acknowledgments
 
-- [x] Backend migration to Cloudflare Workers
-- [x] Frontend setup with React + Vite
-- [ ] Complete API route implementation (17 weeks planned)
-- [ ] Mobile app (React Native)
-- [ ] Offline support (PWA)
-- [ ] Advanced analytics dashboard
-- [ ] AI-powered insights
-
----
-
-## 📚 Additional Documentation
-
-- [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) - Detailed migration documentation
-- [backend/README.md](./backend/README.md) - Backend-specific documentation
-- [frontend/README.md](./frontend/README.md) - Frontend-specific documentation
+- **Development Team** - Thika Technical Training Institute
+- **Migration to Cloudflare** - January 2025
+- **Powered by**: Cloudflare Workers, Pages, Hono, React, Vite, Supabase
 
 ---
 
 **Built with ❤️ for Thika Technical Training Institute**
+
+🌐 **Repository**: https://github.com/alexfreed254/academicmanagementsystem-ams-
