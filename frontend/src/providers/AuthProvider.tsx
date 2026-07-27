@@ -10,7 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import * as authApi from '@/api/auth'
 import type { AuthUser } from '@/types'
-import { getApiErrorMessage, setAccessToken, TOKEN_KEY } from '@/lib/apiClient'
+import { getApiErrorMessage } from '@/lib/apiClient'
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -31,21 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
 
   const refresh = useCallback(async () => {
-    // Pages → Workers: Bearer JWT in sessionStorage. Probe /auth/me when a token exists
-    // (or always in cookie mode for legacy Flask).
-    const authMode = ((import.meta.env.VITE_AUTH_MODE as string | undefined) || 'bearer').toLowerCase()
-    const hasToken = Boolean(sessionStorage.getItem(TOKEN_KEY))
-    if (authMode === 'bearer' && !hasToken) {
-      setUser(null)
-      setLoading(false)
-      return
-    }
     try {
       const me = await authApi.fetchMe()
       setUser(me)
       setError(null)
     } catch {
-      setAccessToken(null)
       setUser(null)
     } finally {
       setLoading(false)
@@ -58,7 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onExpired = () => {
-      setAccessToken(null)
       setUser(null)
       queryClient.clear()
     }

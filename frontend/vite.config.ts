@@ -13,10 +13,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Default: local Cloudflare Worker (`wrangler dev` → :8787).
-      // Override with VITE_DEV_PROXY=http://127.0.0.1:5000 to hit legacy Flask.
       '/api': {
-        target: process.env.VITE_DEV_PROXY || 'http://127.0.0.1:8787',
+        target: process.env.VITE_DEV_PROXY || 'http://127.0.0.1:5000',
         changeOrigin: true,
       },
       '/static': {

@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { fetchStudentDashboard } from '@/api/student'
 import { PortalShell } from '@/layouts/PortalShell'
-import { PrideFooter } from '@/components/PrideFooter'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
 import { getApiErrorMessage } from '@/lib/apiClient'
 
@@ -190,7 +189,6 @@ export default function StudentDashboardPage() {
           </div>
         </div>
       </div>
-      <PrideFooter />
     </PortalShell>
   )
 }

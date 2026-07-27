@@ -1,11 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { fetchAttendance, submitAttendance } from '@/api/trainer'
 import { PortalShell } from '@/layouts/PortalShell'
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/States'
-import { getApiErrorMessage, legacyHref } from '@/lib/apiClient'
-import { PrintPdfLink } from '@/pages/shared/PrintReportPages'
+import { getApiErrorMessage } from '@/lib/apiClient'
 
 const YEARS = Array.from({ length: 12 }, (_, i) => 2024 + i)
 const WEEKS = Array.from({ length: 15 }, (_, i) => i + 1)
@@ -143,22 +142,6 @@ export default function AttendancePage() {
             />
           </div>
 
-          {classId && unitId ? (
-            <div className="mt-4 flex flex-wrap gap-3">
-              <PrintPdfLink
-                to="/trainer/attendance/print"
-                params={new URLSearchParams({
-                  class_id: classId,
-                  unit_id: unitId,
-                  year: String(year),
-                  term: String(term),
-                })}
-                label="Print unit register (PDF)"
-                style={{ background: '#1e5a9f' }}
-              />
-            </div>
-          ) : null}
-
           <div className="mt-4">
             <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Lesson time</div>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -202,24 +185,9 @@ export default function AttendancePage() {
         {data.attendance_submitted ? (
           <div className="mb-4 rounded-xl px-4 py-3 text-sm font-medium" style={{ background: '#dbeafe', color: '#2563eb' }}>
             Attendance already submitted for this session.{' '}
-            {(() => {
-              const href = legacyHref(
-                `/trainer/view-session?class_id=${classId}&unit_id=${unitId}&week=${week}&lesson=${lesson}&year=${year}&term=${term}`,
-              )
-              return href ? (
-                <a className="font-bold underline" href={href} target="_blank" rel="noreferrer">
-                  View session
-                </a>
-              ) : (
-                <Link
-                  className="font-bold underline"
-                  to={`/trainer/session/print?class_id=${encodeURIComponent(classId)}&unit_id=${encodeURIComponent(unitId)}&week=${week}&lesson=${encodeURIComponent(lesson)}&year=${year}&term=${term}`}
-                  target="_blank"
-                >
-                  Print session
-                </Link>
-              )
-            })()}
+            <a className="font-bold underline" href={`/trainer/view-session?class_id=${classId}&unit_id=${unitId}&week=${week}&lesson=${lesson}&year=${year}&term=${term}`}>
+              View session
+            </a>
           </div>
         ) : null}
 
