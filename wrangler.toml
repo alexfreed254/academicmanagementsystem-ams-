@@ -1,31 +1,36 @@
 # Cloudflare Workers configuration for TTTI AMS Backend
 
 name = "ttti-ams-backend"
-main = "src/index.ts"
+main = "backend/src/index.ts"
 compatibility_date = "2024-01-01"
-node_compat = true
+compatibility_flags = ["nodejs_compat"]
 
 [env.production]
 name = "ttti-ams-backend"
 vars = { ENVIRONMENT = "production" }
+compatibility_flags = ["nodejs_compat"]
 
 [env.staging]
 name = "ttti-ams-backend-staging"
 vars = { ENVIRONMENT = "staging" }
+compatibility_flags = ["nodejs_compat"]
 
-# KV Namespaces for session storage
-[[kv_namespaces]]
-binding = "SESSIONS"
-id = "your-kv-namespace-id"
+# KV Namespaces for session storage (create with: wrangler kv:namespace create SESSIONS)
+# Uncomment and add your KV namespace ID after creation
+# [[kv_namespaces]]
+# binding = "SESSIONS"
+# id = "your-kv-namespace-id-here"
 
 # Durable Objects for real-time features (biometric, notifications)
-[[durable_objects.bindings]]
-name = "BIOMETRIC_SESSION"
-class_name = "BiometricSession"
+# Uncomment after backend implementation is complete
+# [[durable_objects.bindings]]
+# name = "BIOMETRIC_SESSION"
+# class_name = "BiometricSession"
+# script_name = "ttti-ams-backend"
 
-[[migrations]]
-tag = "v1"
-new_classes = ["BiometricSession"]
+# [[migrations]]
+# tag = "v1"
+# new_classes = ["BiometricSession"]
 
 # Environment variables (set via dashboard or CLI)
 # SUPABASE_URL
