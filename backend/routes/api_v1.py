@@ -17,7 +17,7 @@ from auth_utils import (
     is_authenticated, write_audit_log, _must_change_password_block,
 )
 from db import get_service_client
-from extensions import limiter
+from extensions import csrf, limiter
 from security_utils import session_safe_profile
 
 api_v1_bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")
@@ -112,49 +112,110 @@ def api_csrf_token():
 
 
 @api_v1_bp.route("/auth/login", methods=["POST"])
+@csrf.exempt
 @limiter.limit("8 per minute")
 def api_login():
+    allowed_origins = {
+        "https://cc477011.thikaacademicmanagementsystem.pages.dev",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    }
+
+    origin = request.headers.get("Origin")
+
+    if origin and origin not in allowed_origins:
+        return _err("Invalid request origin.", 403, "invalid_origin")
+
     body = request.get_json(silent=True) or {}
     login_type = (body.get("login_type") or "staff").strip().lower()
 
     if login_type == "staff":
         email = (body.get("email") or "").strip()
         password = body.get("password") or ""
+
         if not email or not password:
             return _err("Email and password are required.", 400)
+
         if "@" not in email:
-            return _err("Staff / Admin sign-in requires an email address and password.", 400)
+            return _err(
+                "Staff / Admin sign-in requires an email address and password.",
+                400
+            )
+
         profile = authenticate_staff(email, password)
+
         if not profile:
-            return _err("Invalid email or password.", 401, "invalid_credentials")
+            return _err(
+                "Invalid email or password.",
+                401,
+                "invalid_credentials"
+            )
+
         sb_session = profile.pop("_session", None)
+
         if not sb_session:
-            return _err("Authentication session could not be established.", 500)
+            return _err(
+                "Authentication session could not be established.",
+                500
+            )
+
         session.clear()
         session.permanent = True
         session[SESSION_USER] = session_safe_profile(profile)
         session[SESSION_ACCESS] = sb_session.access_token
         session[SESSION_REFRESH] = sb_session.refresh_token
-        write_audit_log("login", target=f"user:{profile['id']}")
-        return _ok({"user": _public_user(profile)})
+
+        write_audit_log(
+            "login",
+            target=f"user:{profile['id']}"
+        )
+
+        return _ok({
+            "user": _public_user(profile)
+        })
 
     if login_type == "student":
         admission_no = (body.get("admission_no") or "").strip()
         password = body.get("password") or ""
+
         if not admission_no or not password:
-            return _err("Admission number and password are required.", 400)
+            return _err(
+                "Admission number and password are required.",
+                400
+            )
+
         if "@" in admission_no:
-            return _err("Trainee sign-in requires an admission number and password, not an email.", 400)
+            return _err(
+                "Trainee sign-in requires an admission number and password, not an email.",
+                400
+            )
+
         profile = authenticate_student(admission_no, password)
+
         if not profile:
-            return _err("Invalid admission number or password.", 401, "invalid_credentials")
+            return _err(
+                "Invalid admission number or password.",
+                401,
+                "invalid_credentials"
+            )
+
         session.clear()
         session.permanent = True
         session[SESSION_USER] = session_safe_profile(profile)
-        write_audit_log("login", target=f"student:{profile['id']}")
-        return _ok({"user": _public_user(profile)})
 
-    return _err("login_type must be 'staff' or 'student'.", 400)
+        write_audit_log(
+            "login",
+            target=f"student:{profile['id']}"
+        )
+
+        return _ok({
+            "user": _public_user(profile)
+        })
+
+    return _err(
+        "login_type must be 'staff' or 'student'.",
+        400
+    )
 
 
 @api_v1_bp.route("/auth/logout", methods=["POST"])
