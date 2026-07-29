@@ -1,7 +1,15 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios'
 import { getLoginUrl } from '@/config/legacy'
 
-const baseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || ''
+/** Flask origin only. Strips accidental trailing /api/v1 so paths are not doubled. */
+function resolveApiBaseUrl(): string {
+  let base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || ''
+  base = base.replace(/\/$/, '')
+  base = base.replace(/\/api\/v1$/i, '')
+  return base
+}
+
+const baseURL = resolveApiBaseUrl()
 
 export const api: AxiosInstance = axios.create({
   baseURL,

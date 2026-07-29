@@ -4,11 +4,11 @@ export function getLegacyOrigin(): string {
   if (fromEnv) return fromEnv
 
   const api = (import.meta.env.VITE_API_BASE_URL as string | undefined) || ''
-  // e.g. https://app.onrender.com/api/v1 → https://app.onrender.com
-  if (api.includes('/api/')) {
-    return api.replace(/\/api\/.*$/, '').replace(/\/$/, '')
+  // Origin only; strip accidental /api/v1 if present
+  if (api) {
+    return api.replace(/\/$/, '').replace(/\/api\/v1$/i, '')
   }
-  return api.replace(/\/$/, '')
+  return ''
 }
 
 /** Canonical login page — Jinja template at /auth/login */

@@ -53,11 +53,11 @@ Copy `.env.example` to `.env`:
 
 | Variable | Purpose |
 |---|---|
-| `VITE_API_BASE_URL` | Empty in local (use Vite proxy). Production: Flask origin e.g. `https://api.example.com` |
-| `VITE_LEGACY_ORIGIN` | Flask origin for not-yet-migrated pages |
+| `VITE_API_BASE_URL` | Empty in local (use Vite proxy). Production: Flask **origin only**, e.g. `https://academicmanagementsystem-ams.onrender.com` — do **not** append `/api/v1` |
+| `VITE_LEGACY_ORIGIN` | Flask origin for Jinja login / not-yet-migrated pages |
 | `VITE_SOCKET_URL` | Optional Socket.IO server |
 
-Flask side (`backend/.env`):
+Flask side (`backend/.env` / Render):
 
 | Variable | Purpose |
 |---|---|

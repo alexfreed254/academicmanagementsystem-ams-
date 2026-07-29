@@ -116,6 +116,8 @@ def api_csrf_token():
 @limiter.limit("8 per minute")
 def api_login():
     allowed_origins = {
+        "https://a5c6e3d7.thikaacademicmanagementsystem.pages.dev",
+        "https://05d5362d.thikaacademicmanagementsystem.pages.dev",
         "https://cc477011.thikaacademicmanagementsystem.pages.dev",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
