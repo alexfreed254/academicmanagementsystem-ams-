@@ -1,0 +1,1364 @@
+{% extends "student/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}My Dashboard{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+{% endblock %}
+
+{% block extra_style %}
+/* --- Root Design Tokens --- */
+:root {
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-light: #dbeafe;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-bg-light: #f8fafc;
+  --color-bg-white: #fff;
+  --color-border: #e2e8f0;
+  --color-border-light: #f1f5f9;
+  --color-text-dark: #0f172a;
+  --color-text-base: #1e293b;
+  --color-text-muted: #64748b;
+  --color-text-light: #94a3b8;
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* --- Typography & Base Design --- */
+.dash {
+  padding: 32px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  color: var(--color-text-base);
+  background: linear-gradient(135deg, var(--color-bg-light) 0%, #f0f4f8 100%);
+  min-height: 100vh;
+}
+
+/* --- Welcome Header with Enhanced Visual Hierarchy --- */
+.welcome-container {
+  margin-bottom: 40px;
+  padding-bottom: 32px;
+  border-bottom: 2px solid var(--color-border);
+  animation: slideInDown 0.6s ease-out;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.welcome-name {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, var(--color-text-dark) 0%, var(--color-text-muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.welcome-sub {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.welcome-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(37, 99, 235, 0.05);
+  border-radius: 6px;
+  transition: var(--transition-smooth);
+}
+
+.welcome-meta-item:hover {
+  background: rgba(37, 99, 235, 0.1);
+  transform: translateY(-2px);
+}
+
+.welcome-meta-item i {
+  color: var(--color-primary);
+  font-size: 14px;
+}
+
+/* --- Metrics Grid with Staggered Animation --- */
+.stats-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+@media (max-width: 1200px) {
+  .stats-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.d-stat {
+  background: var(--color-bg-white);
+  border-radius: 14px;
+  padding: 28px;
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition-smooth);
+  box-shadow: var(--shadow-sm);
+  animation: fadeInUp 0.6s ease-out backwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.d-stat:nth-child(1) { animation-delay: 0.1s; }
+.d-stat:nth-child(2) { animation-delay: 0.2s; }
+.d-stat:nth-child(3) { animation-delay: 0.3s; }
+.d-stat:nth-child(4) { animation-delay: 0.4s; }
+
+.d-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.d-stat:hover {
+  border-color: var(--color-primary-light);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-4px);
+}
+
+.d-stat:hover::before {
+  opacity: 1;
+}
+
+.d-stat-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.d-stat-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.d-stat-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--color-text-dark);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: 12px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.d-stat-sub {
+  font-size: 0.85rem;
+  color: var(--color-text-light);
+  font-weight: 500;
+}
+
+.d-stat-footer-btn {
+  margin-top: 20px;
+}
+
+.d-stat-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: var(--transition-smooth);
+  padding: 6px 0;
+}
+
+.d-stat-action-link:hover {
+  color: var(--color-primary-dark);
+  transform: translateX(4px);
+}
+
+.d-stat-action-link i {
+  transition: transform 0.3s ease;
+}
+
+.d-stat-action-link:hover i {
+  transform: translateX(4px);
+}
+
+/* --- Stat Badges & Progress --- */
+.stat-badge-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.stat-meta-text {
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.d-stat-bar {
+  height: 6px;
+  background: var(--color-border-light);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 18px;
+  position: relative;
+}
+
+.d-stat-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3));
+  pointer-events: none;
+}
+
+.d-stat-bar-fill {
+  height: 100%;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 3px;
+}
+
+/* --- Quick Actions with Hover Effects --- */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.q-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--color-bg-white);
+  border: 1.5px solid var(--color-border);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-base);
+  transition: var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.q-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.q-btn:hover::before {
+  left: 100%;
+}
+
+.q-btn:hover {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
+}
+
+.q-btn i {
+  font-size: 18px;
+  color: var(--color-primary);
+  transition: var(--transition-smooth);
+}
+
+.q-btn:hover i {
+  transform: scale(1.2) rotate(5deg);
+}
+
+/* --- Content Cards with Enhanced Styling --- */
+.c-card {
+  background: var(--color-bg-white);
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  margin-bottom: 32px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-smooth);
+}
+
+.c-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.c-card-head {
+  padding: 24px;
+  border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.02) 0%, transparent 100%);
+}
+
+.c-card-head-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  letter-spacing: -0.01em;
+}
+
+.c-card-head a {
+  font-size: 0.85rem;
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+  transition: var(--transition-smooth);
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.c-card-head a:hover {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+.c-card-body {
+  padding: 24px;
+}
+
+/* --- Data Rows & Lists --- */
+.card-list-row {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: var(--transition-smooth);
+}
+
+.card-list-row:last-child {
+  border-bottom: none;
+}
+
+.card-list-row:hover {
+  background: rgba(37, 99, 235, 0.02);
+  padding-left: 28px;
+}
+
+.card-list-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.card-list-title {
+  font-weight: 600;
+  color: var(--color-text-dark);
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.card-list-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.card-list-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: var(--color-text-light);
+  flex-wrap: wrap;
+}
+
+.card-list-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- Industrial Attachment Banner --- */
+.attach-banner {
+  background: linear-gradient(135deg, var(--color-bg-white) 0%, rgba(37, 99, 235, 0.02) 100%);
+  border-radius: 14px;
+  padding: 32px;
+  border: 2px solid var(--color-primary-light);
+  margin-bottom: 40px;
+  box-shadow: var(--shadow-md);
+  animation: slideInUp 0.6s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.attach-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 640px) {
+  .attach-header {
+    flex-direction: column;
+  }
+}
+
+.attach-tagline {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.attach-company {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--color-text-dark);
+  margin-top: 6px;
+  letter-spacing: -0.02em;
+}
+
+.attach-meta {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.attach-meta i {
+  color: var(--color-primary);
+}
+
+.attach-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 768px) {
+  .attach-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .attach-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.attach-metric {
+  background: linear-gradient(135deg, var(--color-bg-light) 0%, rgba(37, 99, 235, 0.05) 100%);
+  border-radius: 10px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  transition: var(--transition-smooth);
+}
+
+.attach-metric:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary-light);
+}
+
+.attach-metric-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.attach-metric-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.attach-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-attach-primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: #fff;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: var(--transition-smooth);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.btn-attach-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+}
+
+.btn-attach-secondary {
+  background: var(--color-bg-white);
+  color: var(--color-text-base);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: var(--transition-smooth);
+  cursor: pointer;
+}
+
+.btn-attach-secondary:hover {
+  background: var(--color-bg-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* --- Map Container --- */
+.map-box {
+  height: 320px;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 28px;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+.leaflet-container {
+  border-radius: 10px;
+}
+
+/* --- Badges with Enhanced Styling --- */
+.sb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: var(--transition-smooth);
+}
+
+.sb-green {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.sb-red {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  color: #991b1b;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.sb-yellow {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+  color: #92400e;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.sb-blue {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
+  color: #1e40af;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.sb-gray {
+  background: linear-gradient(135deg, rgba(100, 116, 139, 0.1) 0%, rgba(100, 116, 139, 0.05) 100%);
+  color: #334155;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+.sb:hover {
+  transform: scale(1.05);
+}
+
+/* --- Table Styling --- */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+@media (max-width: 992px) {
+  .two-col {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.att-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.att-table th {
+  padding: 16px 20px;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: linear-gradient(135deg, var(--color-bg-light) 0%, rgba(37, 99, 235, 0.02) 100%);
+  border-bottom: 2px solid var(--color-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.att-table td {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-border-light);
+  font-size: 0.9rem;
+  color: var(--color-text-base);
+  transition: var(--transition-smooth);
+}
+
+.att-table tbody tr:hover {
+  background: rgba(37, 99, 235, 0.02);
+}
+
+.unit-tag-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.unit-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.unit-title-text {
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.progress-col-layout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-bar {
+  width: 80px;
+  height: 6px;
+  background: var(--color-border-light);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.pf-high {
+  background: linear-gradient(90deg, var(--color-success) 0%, #059669 100%);
+}
+
+.pf-med {
+  background: linear-gradient(90deg, var(--color-warning) 0%, #d97706 100%);
+}
+
+.pf-low {
+  background: linear-gradient(90deg, var(--color-danger) 0%, #dc2626 100%);
+}
+
+.pct-high { color: var(--color-success); font-weight: 700; }
+.pct-med { color: var(--color-warning); font-weight: 700; }
+.pct-low { color: var(--color-danger); font-weight: 700; }
+
+/* --- Empty State --- */
+.empty-box {
+  text-align: center;
+  padding: 60px 24px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.02) 0%, transparent 100%);
+  border-radius: 10px;
+  border: 2px dashed var(--color-border);
+}
+
+.empty-box i {
+  font-size: 48px;
+  color: var(--color-border);
+  margin-bottom: 16px;
+  display: block;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.empty-box h4 {
+  font-size: 1rem;
+  color: var(--color-text-dark);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.empty-box p {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-bottom: 20px;
+}
+
+.empty-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: var(--transition-smooth);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.empty-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+}
+
+/* --- Footer --- */
+.dash-footer {
+  text-align: center;
+  padding: 60px 0 24px;
+  color: var(--color-text-light);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.dash-footer p {
+  margin: 0;
+}
+
+/* --- Responsive Design Enhancements --- */
+@media (max-width: 768px) {
+  .dash {
+    padding: 24px 16px;
+  }
+
+  .welcome-name {
+    font-size: 2rem;
+  }
+
+  .welcome-sub {
+    gap: 12px;
+    font-size: 0.85rem;
+  }
+
+  .stats-4 {
+    gap: 16px;
+  }
+
+  .d-stat {
+    padding: 20px;
+  }
+
+  .attach-banner {
+    padding: 24px;
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .dash {
+    padding: 16px 12px;
+  }
+
+  .welcome-name {
+    font-size: 1.5rem;
+  }
+
+  .d-stat-value {
+    font-size: 1.75rem;
+  }
+
+  .attach-banner {
+    padding: 16px;
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+  }
+
+  .q-btn {
+    padding: 12px;
+    font-size: 0.75rem;
+  }
+
+  .q-btn i {
+    font-size: 16px;
+  }
+}
+
+/* --- Print Styles --- */
+@media print {
+  .dash {
+    background: white;
+  }
+
+  .d-stat,
+  .c-card,
+  .attach-banner {
+    box-shadow: none;
+    border: 1px solid var(--color-border);
+    page-break-inside: avoid;
+  }
+}
+
+/* --- Accessibility Enhancements --- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-light: #1e293b;
+    --color-bg-white: #0f172a;
+    --color-border: #334155;
+    --color-border-light: #1e293b;
+    --color-text-dark: #f1f5f9;
+    --color-text-base: #e2e8f0;
+    --color-text-muted: #cbd5e1;
+    --color-text-light: #94a3b8;
+  }
+
+  .dash {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  }
+
+  .welcome-name {
+    background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+{% endblock %}
+
+{% block content %}
+<div class="dash">
+
+  <!-- Welcome Section -->
+  <div class="welcome-container">
+    <h1 class="welcome-name">Welcome back, {{ (student.get('full_name', '') or '').split()[0] or 'Student' }}!</h1>
+    <div class="welcome-sub">
+      <span class="welcome-meta-item"><i class="far fa-id-badge"></i> {{ student.get('admission_no', '') }}</span>
+      <span class="welcome-meta-item"><i class="far fa-calendar"></i> {{ current_month }}</span>
+    </div>
+  </div>
+
+  <!-- Key Metrics -->
+  <div class="stats-4">
+
+    <div class="d-stat">
+      <div class="d-stat-top">
+        <span class="d-stat-label">Attendance Rate</span>
+        <span class="sb {% if overall_pct >= 75 %}sb-green{% elif overall_pct >= 50 %}sb-yellow{% else %}sb-red{% endif %}">
+          {{ overall_pct }}%
+        </span>
+      </div>
+      <div>
+        <div class="d-stat-value">{{ total_attended }}/{{ stats.attendance_total }}</div>
+        <div class="d-stat-sub">lessons attended</div>
+      </div>
+      <div class="d-stat-bar">
+        <div class="d-stat-bar-fill {{ 'pf-high' if overall_pct >= 75 else 'pf-med' if overall_pct >= 50 else 'pf-low' }}" style="width:{{ overall_pct }}%"></div>
+      </div>
+    </div>
+
+    <div class="d-stat">
+      <div class="d-stat-top">
+        <span class="d-stat-label">Assessments & POE</span>
+        <span class="sb sb-blue">{{ stats.total }} total</span>
+      </div>
+      <div>
+        <div class="d-stat-value">{{ stats.approved }}</div>
+        <div class="d-stat-sub">approved records</div>
+      </div>
+      <div class="stat-badge-group">
+        <span class="sb sb-green">{{ stats.approved }} Ok</span>
+        <span class="sb sb-yellow">{{ stats.pending }} Pending</span>
+      </div>
+    </div>
+
+    <div class="d-stat">
+      <div class="d-stat-top">
+        <span class="d-stat-label">Industrial Attachment</span>
+        {% if stats.attachment_active > 0 %}
+        <span class="sb sb-green">Active</span>
+        {% else %}
+        <span class="sb sb-gray">Inactive</span>
+        {% endif %}
+      </div>
+      <div>
+        <div class="d-stat-value">{{ stats.logbook_entries }}</div>
+        <div class="d-stat-sub">logged entries</div>
+      </div>
+      <div class="stat-meta-text">
+        <i class="linearicon-list"></i> {{ stats.pending_competencies }} pending competencies
+      </div>
+    </div>
+
+    <div class="d-stat">
+      <div class="d-stat-top">
+        <span class="d-stat-label">Clearance Status</span>
+      </div>
+      <div>
+        <div class="d-stat-value" style="font-size: 1.75rem;">
+          {% set cl_status = stats.get('clearance_status', '') %}
+          {% set cl_stage = stats.get('clearance_stage', 0) %}
+          {% if cl_status == 'completed' %}Cleared
+          {% elif cl_status in ('in_progress', 'pending') %}In Progress
+          {% elif cl_status == 'returned' %}Returned
+          {% elif cl_status == 'rejected' %}Rejected
+          {% elif clearance_eligible %}Eligible
+          {% else %}Pending{% endif %}
+        </div>
+        <div class="d-stat-sub">
+          {% if cl_status == 'completed' %}Certificate ready for download
+          {% elif cl_status in ('in_progress', 'pending') %}Stage {{ cl_stage or 1 }} of 2 underway
+          {% elif cl_status == 'returned' %}Correction required — see details
+          {% elif cl_status == 'rejected' %}Contact your HOD for guidance
+          {% elif clearance_eligible %}All requirements satisfied
+          {% else %}Requirements incomplete{% endif %}
+        </div>
+      </div>
+      {% if cl_status %}
+      <div class="d-stat-footer-btn">
+        <a href="/clearance/" class="d-stat-action-link">
+          View Clearance Progress <i class="fas fa-arrow-right"></i>
+        </a>
+      </div>
+      {% elif clearance_eligible %}
+      <div class="d-stat-footer-btn">
+        <a href="/clearance/" class="d-stat-action-link">
+          Start Clearance Process <i class="fas fa-arrow-right"></i>
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="c-card">
+    <div class="c-card-head">
+      <span class="c-card-head-title">Quick Actions</span>
+    </div>
+    <div class="c-card-body">
+      <div class="quick-grid">
+        <a href="/student/units" class="q-btn" title="View your enrolled units">
+          <i class="far fa-book"></i>
+          <span>My Units</span>
+        </a>
+        <a href="/student/attendance" class="q-btn" title="Check attendance records">
+          <i class="far fa-calendar-check"></i>
+          <span>Attendance</span>
+        </a>
+        <a href="/student/marks" class="q-btn" title="View your transcripts">
+          <i class="far fa-chart-bar"></i>
+          <span>Transcripts</span>
+        </a>
+        <a href="/student/portfolio" class="q-btn" title="Manage evidence portfolio">
+          <i class="far fa-folder"></i>
+          <span>Portfolio</span>
+        </a>
+        <a href="/student/assessments" class="q-btn" title="View assessments">
+          <i class="far fa-file-alt"></i>
+          <span>Assessments</span>
+        </a>
+        <a href="/student/documents" class="q-btn" title="Access documents">
+          <i class="far fa-file-archive"></i>
+          <span>Documents</span>
+        </a>
+        <a href="/student/exam-booking-form" class="q-btn" title="Book exams">
+          <i class="far fa-edit"></i>
+          <span>Exam Booking</span>
+        </a>
+        <a href="/student/industrial-attachment" class="q-btn" title="Manage attachment">
+          <i class="far fa-building"></i>
+          <span>Attachment</span>
+        </a>
+        <a href="/student/logbook" class="q-btn" title="View digital logbook">
+          <i class="far fa-address-book"></i>
+          <span>Logbook</span>
+        </a>
+        <a href="/clearance/" class="q-btn" title="Course clearance">
+          <i class="far fa-check-square"></i>
+          <span>Clearance</span>
+        </a>
+        <a href="/student/employment-status" class="q-btn" title="Employment status">
+          <i class="far fa-user"></i>
+          <span>Employment</span>
+        </a>
+        <a href="/student/profile" class="q-btn" title="Edit profile">
+          <i class="far fa-user-circle"></i>
+          <span>Profile</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Industrial Attachment Banner -->
+  {% if current_attachment %}
+  <div class="attach-banner">
+    <div class="attach-header">
+      <div>
+        <div class="attach-tagline">Active Industrial Attachment</div>
+        <div class="attach-company">{{ current_attachment.companies.name }}</div>
+        <div class="attach-meta">
+          <span><i class="fas fa-map-marker-alt"></i> {{ current_attachment.companies.address }}</span>
+          <span>•</span>
+          <span><i class="far fa-user"></i> Mentor: {{ current_attachment.mentor_name }}</span>
+        </div>
+      </div>
+      <span class="sb sb-blue">
+        {{ current_attachment.status | title }}
+      </span>
+    </div>
+
+    <div class="attach-grid">
+      <div class="attach-metric">
+        <div class="attach-metric-label">Start Date</div>
+        <div class="attach-metric-val">{{ current_attachment.start_date }}</div>
+      </div>
+      <div class="attach-metric">
+        <div class="attach-metric-label">End Date</div>
+        <div class="attach-metric-val">{{ current_attachment.end_date or 'Ongoing' }}</div>
+      </div>
+      <div class="attach-metric">
+        <div class="attach-metric-label">Unit Code</div>
+        <div class="attach-metric-val">{{ current_attachment.units.code }}</div>
+      </div>
+    </div>
+
+    {% if current_attachment.companies.latitude and current_attachment.companies.longitude %}
+    <div id="attachmentMap" class="map-box"></div>
+    <div class="attach-actions">
+      <a href="https://maps.google.com/?q={{ current_attachment.companies.latitude }},{{ current_attachment.companies.longitude }}" target="_blank" class="btn-attach-primary">
+        <i class="fas fa-map"></i> Open Google Maps
+      </a>
+      <a href="/student/industrial-attachment" class="btn-attach-secondary">
+        <i class="fas fa-info-circle"></i> View Details
+      </a>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Two Column Layout: Attendance & Assessments -->
+  <div class="two-col">
+
+    <!-- Attendance by Unit -->
+    <div class="c-card">
+      <div class="c-card-head">
+        <span class="c-card-head-title">Attendance by Unit</span>
+        <a href="/student/attendance">View All</a>
+      </div>
+      {% if attendance_data %}
+      <div class="table-container">
+        <table class="att-table">
+          <thead>
+            <tr>
+              <th>Unit</th>
+              <th style="text-align:right">Attended</th>
+              <th style="text-align:right">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in attendance_data %}
+            {% set attended = row.attended or 0 %}
+            {% set total   = row.total_records or 0 %}
+            {% set pct = ((attended / total) * 100) | round(1) if total > 0 else 0 %}
+            <tr>
+              <td>
+                <div class="unit-tag-wrapper">
+                  <span class="unit-title-text">{{ row.unit_name }}</span>
+                  <span class="unit-tag">{{ row.unit_code }}</span>
+                </div>
+              </td>
+              <td style="text-align:right; font-weight: 500;">
+                {{ attended }} / {{ total }}
+              </td>
+              <td style="text-align:right;">
+                <div class="progress-col-layout" style="justify-content: flex-end;">
+                  <span style="font-weight:600; font-size:13px;" class="{{ 'pct-high' if pct >= 75 else 'pct-med' if pct >= 50 else 'pct-low' }}">{{ pct }}%</span>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-box">
+        <i class="far fa-calendar"></i>
+        <h4>No Attendance Records</h4>
+        <p>Attendance data will appear here once submitted by your trainer.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Recent Assessments -->
+    <div class="c-card">
+      <div class="c-card-head">
+        <span class="c-card-head-title">Recent Assessments</span>
+        <a href="/student/assessments">View All</a>
+      </div>
+      {% if recent_assessments %}
+      <div>
+        {% for assessment in recent_assessments[:6] %}
+        <div class="card-list-row">
+          <div class="card-list-main">
+            <div class="card-list-title">{{ assessment.units.name }}</div>
+            <div class="card-list-meta">
+              <span><i class="far fa-calendar"></i> {{ assessment.uploaded_at[:10] }}</span>
+              {% if assessment.script_file_size_fmt %}
+              <span>•</span>
+              <span><i class="far fa-file"></i> {{ assessment.script_file_size_fmt }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <span class="sb {% if assessment.status == 'approved' %}sb-green{% elif assessment.status == 'rejected' %}sb-red{% else %}sb-yellow{% endif %}">
+            {{ assessment.status | title }}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-box">
+        <i class="far fa-file-alt"></i>
+        <h4>No Assessments Yet</h4>
+        <p>Upload your assessment files or Portfolio of Evidence items to begin.</p>
+        <a href="/student/upload-poe" class="empty-action-btn">
+          <i class="fas fa-upload"></i> Upload Portfolio Item
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Recent Logbook Entries -->
+  {% if recent_logbook_entries %}
+  <div class="c-card">
+    <div class="c-card-head">
+      <span class="c-card-head-title">Recent Logbook Entries</span>
+      <a href="/student/logbook">View All</a>
+    </div>
+    {% for log in recent_logbook_entries %}
+    {% set task_text = log.get('tasks_performed') or '' %}
+    <div class="card-list-row">
+      <div class="card-list-main">
+        <div class="card-list-title">{{ task_text[:70] }}{% if task_text|length > 70 %}…{% endif %}</div>
+        <div class="card-list-desc" style="margin-top:2px; margin-bottom:6px;">{{ task_text[:140] }}{% if task_text|length > 140 %}…{% endif %}</div>
+        <div class="card-list-meta">
+          <span><i class="far fa-calendar"></i> {{ log.get('log_date','—') }}</span>
+          <span>•</span>
+          <span><i class="far fa-clock"></i> {{ log.get('entry_time','—') }}</span>
+          <span>•</span>
+          <span>{{ log.get('hours_worked', 0) }} hrs</span>
+        </div>
+      </div>
+      <span class="sb {% if log.get('mentor_approval_status') == 'approved' %}sb-green{% elif log.get('mentor_approval_status') == 'rejected' %}sb-red{% else %}sb-yellow{% endif %}">
+        {{ (log.get('mentor_approval_status') or 'pending') | title }}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Footer -->
+  <div class="dash-footer">
+    <p>Verified Learning • Mapped Progress • Empowered Futures</p>
+  </div>
+
+</div>
+
+<!-- Map Initialization Script -->
+{% if current_attachment and current_attachment.companies.latitude and current_attachment.companies.longitude %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const lat = {{ current_attachment.companies.latitude }};
+    const lng = {{ current_attachment.companies.longitude }};
+    const map = L.map('attachmentMap', {
+      zoomControl: false,
+      scrollWheelZoom: true,
+      touchZoom: true
+    }).setView([lat, lng], 15);
+
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    const marker = L.marker([lat, lng], {
+      title: '{{ current_attachment.companies.name }}'
+    }).addTo(map);
+
+    marker.bindPopup(
+      '<div style="font-weight:600; margin-bottom:4px;">{{ current_attachment.companies.name }}</div>' +
+      '<div style="font-size:0.85rem; color:#666;">{{ current_attachment.companies.address }}</div>'
+    ).openPopup();
+
+    // Smooth scroll to map on mobile when clicked
+    map.on('click', function() {
+      if (window.innerWidth < 768) {
+        document.getElementById('attachmentMap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  });
+</script>
+{% endif %}
+
+<!-- Smooth Scroll Behavior -->
+<script>
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  // Add loading animation to links
+  document.querySelectorAll('a[href^="/"]').forEach(link => {
+    link.addEventListener('click', function() {
+      this.style.opacity = '0.7';
+    });
+  });
+</script>
+
+<!-- Pride in Technology Footer -->
+{% include 'partials/pride_footer.html' %}
+
+{% endblock %}

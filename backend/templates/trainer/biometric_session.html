@@ -1,0 +1,420 @@
+{% extends "trainer/base.html" %}
+{% block title %}Live Biometric Session{% endblock %}
+{% block page_title %}Live Biometric Scanning{% endblock %}
+
+{% block extra_style %}
+<style>
+.bs-wrap { padding: 20px; }
+
+/* ── Session header ── */
+.sess-hdr {
+  background: linear-gradient(135deg,#6d28d9,#5b21b6);
+  border-radius: 16px; padding: 20px 24px; margin-bottom: 20px;
+  color: #fff; box-shadow: 0 6px 20px rgba(109,40,217,.2);
+}
+.sess-hdr-top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+.sess-hdr h2 { font-size: 18px; font-weight: 800; margin: 0 0 10px; }
+.meta-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.chip {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:5px 11px; background:rgba(255,255,255,.15);
+  border-radius:20px; font-size:12px; font-weight:600;
+}
+.live-dot {
+  display:flex; align-items:center; gap:7px;
+  font-size:13px; font-weight:700; white-space:nowrap; padding-top:4px;
+}
+.dot {
+  width:11px; height:11px; border-radius:50%; background:#4ade80;
+  animation: blink 1.4s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+/* ── Stats row ── */
+.stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px; }
+.stat-card {
+  background:#fff; border-radius:14px; padding:18px 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  display:flex; align-items:center; gap:14px; border-left:4px solid #e5e7eb;
+}
+.stat-card.present { border-left-color:#22c55e; }
+.stat-card.absent  { border-left-color:#ef4444; }
+.stat-card.total   { border-left-color:#3b82f6; }
+.stat-icon { width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+.stat-icon.present { background:#dcfce7; color:#15803d; }
+.stat-icon.absent  { background:#fee2e2; color:#b91c1c; }
+.stat-icon.total   { background:#dbeafe; color:#1e40af; }
+.stat-val { font-size:30px; font-weight:800; color:#111827; line-height:1; }
+.stat-lbl { font-size:11px; color:#9ca3af; font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-top:3px; }
+
+/* Progress bar */
+.prog-wrap { background:#fff; border-radius:14px; padding:16px 20px; box-shadow:0 2px 10px rgba(0,0,0,.06); margin-bottom:20px; }
+.prog-label { display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:#374151; margin-bottom:8px; }
+.prog-bar { height:10px; background:#f3f4f6; border-radius:9999px; overflow:hidden; }
+.prog-fill { height:100%; background:linear-gradient(90deg,#22c55e,#16a34a); border-radius:9999px; transition:width .4s; }
+
+/* ── Student table ── */
+.att-table-card { background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(0,0,0,.07); margin-bottom:20px; overflow:hidden; }
+.att-table-head {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:16px 20px; border-bottom:2px solid #f3f4f6; flex-wrap:wrap; gap:10px;
+}
+.att-table-head h3 { font-size:15px; font-weight:700; color:#111827; margin:0; }
+
+.search-box {
+  padding:8px 13px; border:1.5px solid #e5e7eb; border-radius:10px;
+  font-size:13px; width:240px; font-family:inherit;
+}
+.search-box:focus { outline:none; border-color:#6d28d9; }
+
+table { width:100%; border-collapse:collapse; }
+thead tr { background:#f9fafb; }
+th { padding:11px 14px; text-align:left; font-size:11.5px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid #e5e7eb; }
+td { padding:11px 14px; font-size:13.5px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+tr:last-child td { border-bottom:none; }
+tr.row-present { background:#f0fdf4; }
+tr.row-absent  { background:#fff; }
+tr.row-present.just-scanned { animation: scanFlash .5s ease-out; }
+@keyframes scanFlash { 0%{background:#fef9c3;} 100%{background:#f0fdf4;} }
+
+.avatar {
+  width:36px; height:36px; border-radius:50%; display:inline-flex; align-items:center;
+  justify-content:center; font-weight:700; font-size:13px; flex-shrink:0;
+  background:#e0e7ff; color:#5b21b6;
+}
+.row-present .avatar { background:#dcfce7; color:#15803d; }
+
+.student-name { font-weight:600; color:#111827; }
+.adm-no { font-size:11px; color:#9ca3af; }
+
+/* Status icons — matching manual attendance green tick / red cross style */
+.status-icon { font-size:22px; display:flex; align-items:center; gap:6px; font-weight:700; }
+.status-icon.present { color:#16a34a; }
+.status-icon.absent  { color:#dc2626; }
+.status-icon.manual  { opacity:.75; }
+
+/* Manual override buttons */
+.btn-toggle {
+  padding:5px 12px; border-radius:8px; border:none; cursor:pointer;
+  font-size:11.5px; font-weight:600; font-family:inherit; transition:all .15s;
+}
+.btn-mark-present { background:#dcfce7; color:#15803d; }
+.btn-mark-present:hover { background:#bbf7d0; }
+.btn-mark-absent  { background:#fee2e2; color:#b91c1c; }
+.btn-mark-absent:hover  { background:#fecaca; }
+
+/* ── Action bar ── */
+.action-bar {
+  display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-bottom:24px;
+}
+.btn-save {
+  padding:13px 32px; border:none; border-radius:12px;
+  background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff;
+  font-size:14px; font-weight:700; cursor:pointer;
+  display:inline-flex; align-items:center; gap:9px;
+  box-shadow:0 4px 14px rgba(34,197,94,.35); transition:all .2s;
+}
+.btn-save:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(34,197,94,.45); }
+.btn-save:disabled { opacity:.55; cursor:not-allowed; transform:none; }
+.btn-cancel {
+  padding:13px 24px; border:1.5px solid #d1d5db; border-radius:12px;
+  background:#fff; color:#374151; font-size:14px; font-weight:700;
+  cursor:pointer; transition:all .2s;
+}
+.btn-cancel:hover { background:#f9fafb; }
+
+/* ── Scan ticker (last scan banner) ── */
+.scan-ticker {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:#1e1b4b; color:#fff; padding:13px 24px; border-radius:14px;
+  box-shadow:0 8px 28px rgba(0,0,0,.25); font-size:14px; font-weight:700;
+  display:flex; align-items:center; gap:12px; z-index:999;
+  animation:slideUp .35s ease-out;
+  white-space:nowrap;
+}
+@keyframes slideUp { from{transform:translateX(-50%) translateY(80px);opacity:0;} to{transform:translateX(-50%) translateY(0);opacity:1;} }
+.scan-ticker i { color:#4ade80; font-size:20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="bs-wrap">
+
+  <!-- Session header -->
+  <div class="sess-hdr">
+    <div class="sess-hdr-top">
+      <div>
+        <h2><i class="fas fa-fingerprint" style="margin-right:8px"></i>{{ session.class_name }} — {{ session.unit_name }}</h2>
+        <div class="meta-chips">
+          <span class="chip"><i class="fas fa-door-open"></i>{{ session.room }}</span>
+          <span class="chip"><i class="fas fa-clock"></i>{{ session.lesson_label }} ({{ session.lesson_time }})</span>
+          <span class="chip"><i class="fas fa-calendar-week"></i>Week {{ session.week }}, Term {{ session.term }} {{ session.year }}</span>
+          <span class="chip"><i class="fas fa-chalkboard-teacher"></i>{{ session.trainer_name }}</span>
+          <span class="chip"><i class="fas fa-calendar-day"></i>{{ session.attendance_date }}</span>
+        </div>
+      </div>
+      <div class="live-dot"><div class="dot"></div> Sensor Live</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card present">
+      <div class="stat-icon present"><i class="fas fa-check-circle"></i></div>
+      <div><div class="stat-val" id="cnt-present">0</div><div class="stat-lbl">Present</div></div>
+    </div>
+    <div class="stat-card absent">
+      <div class="stat-icon absent"><i class="fas fa-times-circle"></i></div>
+      <div><div class="stat-val" id="cnt-absent">{{ session.students|length }}</div><div class="stat-lbl">Absent</div></div>
+    </div>
+    <div class="stat-card total">
+      <div class="stat-icon total"><i class="fas fa-users"></i></div>
+      <div><div class="stat-val">{{ session.students|length }}</div><div class="stat-lbl">Total</div></div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="prog-wrap">
+    <div class="prog-label">
+      <span>Attendance Progress</span>
+      <span id="prog-pct">0%</span>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+  </div>
+
+  <!-- Student table -->
+  <div class="att-table-card">
+    <div class="att-table-head">
+      <h3><i class="fas fa-list" style="color:#6d28d9;margin-right:6px"></i>Student Attendance</h3>
+      <input class="search-box" id="searchInput" placeholder="Search name or admission no…" oninput="filterRows()">
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Student</th>
+          <th>Admission No.</th>
+          <th style="text-align:center">Status</th>
+          <th style="text-align:center">Override</th>
+        </tr>
+      </thead>
+      <tbody id="studentTbody">
+        {% for s in session.students %}
+        <tr class="row-{{ s.status }}" id="row-{{ s.id }}" data-search="{{ s.name|lower }} {{ s.admission_no|lower }}">
+          <td style="color:#9ca3af;font-weight:600">{{ loop.index }}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="avatar" id="av-{{ s.id }}">{{ s.name[0]|upper }}</div>
+              <div>
+                <div class="student-name">{{ s.name }}</div>
+                {% if not s.biometric_id %}
+                <div style="font-size:10px;color:#f59e0b;font-weight:600"><i class="fas fa-exclamation-triangle"></i> No fingerprint enrolled</div>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td class="adm-no">{{ s.admission_no }}</td>
+          <td style="text-align:center" id="status-{{ s.id }}">
+            {% if s.status == 'present' %}
+            <span class="status-icon present"><i class="fas fa-check-circle"></i> Present</span>
+            {% else %}
+            <span class="status-icon absent"><i class="fas fa-times-circle"></i> Absent</span>
+            {% endif %}
+          </td>
+          <td style="text-align:center" id="btn-{{ s.id }}">
+            {% if s.status == 'present' %}
+            <button class="btn-toggle btn-mark-absent" onclick="markStudent('{{ s.id }}', 'absent')">
+              <i class="fas fa-times"></i> Mark Absent
+            </button>
+            {% else %}
+            <button class="btn-toggle btn-mark-present" onclick="markStudent('{{ s.id }}', 'present')">
+              <i class="fas fa-check"></i> Mark Present
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="action-bar">
+    <button class="btn-save" id="btnSave" onclick="saveAttendance()">
+      <i class="fas fa-save"></i> Save Attendance
+    </button>
+    <button class="btn-cancel" onclick="cancelSession()">
+      <i class="fas fa-times"></i> Cancel
+    </button>
+  </div>
+
+</div>
+
+<script>
+const SESSION_ID  = '{{ session_id }}';
+const TOTAL       = {{ session.students|length }};
+let presentCount  = {{ session.students|selectattr("status","eq","present")|list|length }};
+let absentCount   = TOTAL - presentCount;
+let polling       = true;
+let ticker        = null;
+let savedAlready  = false;
+
+// ── Update header counts + progress bar ──────────────────────────────────────
+function updateCounts(p, a) {
+  document.getElementById('cnt-present').textContent = p;
+  document.getElementById('cnt-absent').textContent  = a;
+  const pct = TOTAL > 0 ? Math.round(p / TOTAL * 100) : 0;
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-pct').textContent  = pct + '%';
+}
+updateCounts(presentCount, absentCount);
+
+// ── Row updater ──────────────────────────────────────────────────────────────
+function applyStatus(sid, status, isNew) {
+  const row    = document.getElementById('row-' + sid);
+  const avEl   = document.getElementById('av-' + sid);
+  const stEl   = document.getElementById('status-' + sid);
+  const btnEl  = document.getElementById('btn-' + sid);
+  if (!row) return;
+
+  if (status === 'present') {
+    row.className = 'row-present';
+    if (isNew) row.classList.add('just-scanned');
+    avEl.style.background = '#dcfce7';
+    avEl.style.color = '#15803d';
+    stEl.innerHTML = '<span class="status-icon present"><i class="fas fa-check-circle"></i> Present</span>';
+    btnEl.innerHTML = '<button class="btn-toggle btn-mark-absent" onclick="markStudent(\'' + sid + '\', \'absent\')"><i class="fas fa-times"></i> Mark Absent</button>';
+  } else {
+    row.className = 'row-absent';
+    avEl.style.background = '';
+    avEl.style.color = '';
+    stEl.innerHTML = '<span class="status-icon absent"><i class="fas fa-times-circle"></i> Absent</span>';
+    btnEl.innerHTML = '<button class="btn-toggle btn-mark-present" onclick="markStudent(\'' + sid + '\', \'present\')"><i class="fas fa-check"></i> Mark Present</button>';
+  }
+}
+
+// ── Scan ticker notification ─────────────────────────────────────────────────
+function showTicker(name, adm) {
+  if (ticker) ticker.remove();
+  ticker = document.createElement('div');
+  ticker.className = 'scan-ticker';
+  ticker.innerHTML = '<i class="fas fa-fingerprint"></i><span>' + name + ' (' + adm + ') — Scanned ✓</span>';
+  document.body.appendChild(ticker);
+  setTimeout(() => { if (ticker) { ticker.remove(); ticker = null; } }, 3500);
+}
+
+// ── Poll every 2 s ───────────────────────────────────────────────────────────
+let knownPresent = new Set();
+{% for s in session.students %}{% if s.status == 'present' %}knownPresent.add('{{ s.id }}');{% endif %}{% endfor %}
+
+function pollStatus() {
+  if (!polling) return;
+  fetch('/biometric/' + SESSION_ID + '/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) return;
+
+      // Update each student
+      data.students.forEach(s => {
+        const isNew = s.status === 'present' && !knownPresent.has(s.id);
+        if (isNew) {
+          knownPresent.add(s.id);
+          applyStatus(s.id, 'present', true);
+          showTicker(s.name, s.admission_no);
+          playBeep();
+        } else {
+          // Only sync absent→absent (don't flicker if no change)
+          const row = document.getElementById('row-' + s.id);
+          if (row) {
+            const curPresent = row.classList.contains('row-present');
+            if (s.status === 'absent' && curPresent) applyStatus(s.id, 'absent', false);
+          }
+        }
+      });
+
+      presentCount = data.present_count;
+      absentCount  = data.absent_count;
+      updateCounts(presentCount, absentCount);
+
+      if (data.session_status === 'saved' && !savedAlready) {
+        savedAlready = true;
+        polling = false;
+        window.location.href = '/trainer/attendance';
+      }
+    })
+    .catch(() => {});
+}
+setInterval(pollStatus, 2000);
+
+// ── Manual mark override ──────────────────────────────────────────────────────
+function markStudent(sid, status) {
+  fetch('/biometric/' + SESSION_ID + '/mark', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({student_id: sid, status: status})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (!d.success) { alert('Error: ' + d.error); return; }
+    if (status === 'present') {
+      if (!knownPresent.has(sid)) { knownPresent.add(sid); presentCount++; absentCount--; }
+    } else {
+      if (knownPresent.has(sid)) { knownPresent.delete(sid); presentCount--; absentCount++; }
+    }
+    applyStatus(sid, status, false);
+    updateCounts(presentCount, absentCount);
+  })
+  .catch(() => alert('Network error'));
+}
+
+// ── Save ─────────────────────────────────────────────────────────────────────
+function saveAttendance() {
+  if (savedAlready) return;
+  if (!confirm('Save attendance?\n\nPresent: ' + presentCount + '\nAbsent: ' + absentCount + '\nTotal: ' + TOTAL + '\n\nThis will be recorded in the database.')) return;
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+  fetch('/biometric/' + SESSION_ID + '/save', {method:'POST'})
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      savedAlready = true; polling = false;
+      btn.innerHTML = '<i class="fas fa-check-circle"></i> Saved!';
+      setTimeout(() => { window.location.href = '/trainer/attendance'; }, 1500);
+    } else {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Attendance';
+      alert('Error: ' + (d.error || 'Unknown error'));
+    }
+  })
+  .catch(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Attendance'; alert('Network error'); });
+}
+
+// ── Cancel ────────────────────────────────────────────────────────────────────
+function cancelSession() {
+  if (!confirm('Cancel this biometric session? Scan data will be discarded.')) return;
+  fetch('/biometric/' + SESSION_ID + '/cancel', {method:'POST'})
+  .then(() => { polling = false; window.location.href = '/trainer/attendance'; })
+  .catch(() => { window.location.href = '/trainer/attendance'; });
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+function filterRows() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  document.querySelectorAll('#studentTbody tr').forEach(row => {
+    row.style.display = (row.dataset.search || '').includes(q) ? '' : 'none';
+  });
+}
+
+// ── Beep on scan ─────────────────────────────────────────────────────────────
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880; osc.type = 'sine';
+    gain.gain.setValueAtTime(.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .15);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + .15);
+  } catch(e) {}
+}
+</script>
+{% endblock %}

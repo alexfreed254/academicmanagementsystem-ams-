@@ -1,0 +1,38 @@
+{% extends "super_admin/base.html" %}
+{% block title %}Industry Partners{% endblock %}
+{% block page_title %}Industry Partners{% endblock %}
+{% block extra_style %}
+.page-wrap{padding:24px}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden}
+.card-header{background:#1565c0;color:#fff;padding:14px 20px;font-size:14px;font-weight:600}
+table{width:100%;border-collapse:collapse}
+th{background:#f5f5f5;padding:10px 14px;text-align:left;font-size:11px;color:#666;border-bottom:2px solid #eee;text-transform:uppercase}
+td{padding:10px 14px;border-bottom:1px solid #f5f5f5;font-size:13px}
+.badge-active{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:#e8f5e9;color:#2e7d32}
+.badge-inactive{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:#f5f5f5;color:#888}
+{% endblock %}
+{% block content %}
+<div class="page-wrap">
+  <div class="card">
+    <div class="card-header"><i class="fas fa-industry"></i> Industry Partners ({{ companies|length }})</div>
+    <table>
+      <thead><tr><th>Company</th><th>Industry</th><th>City</th><th>Department</th><th>Slots</th><th>Contact</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for c in companies %}
+        <tr>
+          <td><strong>{{ c.name }}</strong></td>
+          <td>{{ c.get('industry_classification','—') }}</td>
+          <td>{{ c.get('city','—') or '—' }}</td>
+          <td>{{ (c.get('departments') or {}).get('name','—') }}</td>
+          <td>{{ c.get('available_slots',0) }}</td>
+          <td>{{ c.get('contact_person','—') or '—' }}<br><small style="color:#aaa">{{ c.get('contact_phone','') or '' }}</small></td>
+          <td><span class="badge-{{ 'active' if c.get('is_active') else 'inactive' }}">{{ 'Active' if c.get('is_active') else 'Inactive' }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;color:#aaa;padding:32px">No industry partners yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

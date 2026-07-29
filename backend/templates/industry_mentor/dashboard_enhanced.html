@@ -1,0 +1,168 @@
+{% extends "industry_mentor/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Industry Mentor Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .stat-card { 
+    transition: transform 0.2s ease, box-shadow 0.2s ease; 
+  }
+  .stat-card:hover { 
+    transform: translateY(-4px); 
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12); 
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="bg-gray-50 min-h-screen p-6">
+  
+  <!-- Header Section -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Industry Mentor Dashboard</h1>
+    <p class="text-gray-600">Monitor and guide your trainees' progress</p>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    
+    <!-- Active Trainees -->
+    <div class="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-users text-green-600 text-xl"></i>
+        </div>
+        <span class="text-2xl font-bold text-green-600">{{ attachments|length }}</span>
+      </div>
+      <h3 class="text-gray-600 text-sm font-medium mb-1">Active Trainees</h3>
+      <p class="text-gray-900 text-lg font-semibold">Under Supervision</p>
+    </div>
+
+    <!-- Pending Logbook Reviews -->
+    <div class="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-book text-orange-600 text-xl"></i>
+        </div>
+        <span class="text-2xl font-bold text-orange-600">{{ pending_logbooks|length }}</span>
+      </div>
+      <h3 class="text-gray-600 text-sm font-medium mb-1">Pending Reviews</h3>
+      <p class="text-gray-900 text-lg font-semibold">Logbook Entries</p>
+    </div>
+
+    <!-- Pending Competency Assessments -->
+    <div class="stat-card bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+          <i class="fas fa-clipboard-check text-blue-600 text-xl"></i>
+        </div>
+        <span class="text-2xl font-bold text-blue-600">{{ pending_competencies|length }}</span>
+      </div>
+      <h3 class="text-gray-600 text-sm font-medium mb-1">Pending Assessments</h3>
+      <p class="text-gray-900 text-lg font-semibold">Competencies</p>
+    </div>
+
+  </div>
+
+  <!-- Pending Logbook Reviews -->
+  <div class="bg-white rounded-xl shadow-sm mb-8 border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-lg font-bold text-gray-900">
+        <i class="fas fa-book text-orange-600 mr-2"></i>Pending Logbook Reviews
+      </h2>
+      <a href="/industry-mentor/logbook" class="text-orange-600 hover:text-orange-700 text-sm font-semibold">
+        View All <i class="fas fa-arrow-right ml-1"></i>
+      </a>
+    </div>
+    {% if pending_logbooks %}
+    <div class="divide-y divide-gray-100">
+      {% for log in pending_logbooks %}
+      <div class="px-6 py-4 hover:bg-gray-50 transition">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <h3 class="font-semibold text-gray-900 mb-1">
+              {{ log.user_profiles.full_name }} ({{ log.user_profiles.admission_no }})
+            </h3>
+            <p class="text-sm text-gray-600 mb-2">{{ log.tasks_performed[:100] }}{% if log.tasks_performed|length > 100 %}...{% endif %}</p>
+            <div class="flex gap-2">
+              <span class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded">
+                <i class="fas fa-calendar mr-1"></i>{{ log.log_date }}
+              </span>
+            </div>
+          </div>
+          <a href="/industry-mentor/logbook" 
+             class="ml-4 bg-orange-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-orange-700 transition inline-flex items-center gap-1">
+            <i class="fas fa-eye"></i> Review
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="px-6 py-12 text-center">
+      <i class="fas fa-book-open text-gray-300 text-5xl mb-4"></i>
+      <p class="text-gray-500">No pending logbook reviews</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Pending Competency Assessments -->
+  <div class="bg-white rounded-xl shadow-sm mb-8 border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-lg font-bold text-gray-900">
+        <i class="fas fa-clipboard-check text-blue-600 mr-2"></i>Pending Competency Assessments
+      </h2>
+      <a href="/industry-mentor/competency" class="text-blue-600 hover:text-blue-700 text-sm font-semibold">
+        View All <i class="fas fa-arrow-right ml-1"></i>
+      </a>
+    </div>
+    {% if pending_competencies %}
+    <div class="divide-y divide-gray-100">
+      {% for comp in pending_competencies %}
+      <div class="px-6 py-4 hover:bg-gray-50 transition">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <h3 class="font-semibold text-gray-900 mb-1">
+              {{ comp.user_profiles.full_name }} ({{ comp.user_profiles.admission_no }})
+            </h3>
+            <p class="text-sm text-gray-600 mb-2">{{ comp.units.name }} - {{ comp.competency_element }}</p>
+          </div>
+          <a href="/industry-mentor/competency" 
+             class="ml-4 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-700 transition inline-flex items-center gap-1">
+            <i class="fas fa-check"></i> Assess
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="px-6 py-12 text-center">
+      <i class="fas fa-clipboard-list text-gray-300 text-5xl mb-4"></i>
+      <p class="text-gray-500">No pending competency assessments</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- My Company -->
+  <div class="bg-gradient-to-r from-green-600 to-green-800 rounded-xl shadow-lg p-6 text-white">
+    <h2 class="text-xl font-bold mb-4">
+      <i class="fas fa-building mr-2"></i>My Company
+    </h2>
+    <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4">
+      <h3 class="text-2xl font-bold mb-2">{{ mentor.companies.name }}</h3>
+      <p class="text-green-100 mb-1">
+        <i class="fas fa-map-marker-alt mr-2"></i>{{ mentor.companies.address }}
+      </p>
+      <p class="text-green-100">
+        <i class="fas fa-briefcase mr-2"></i>{{ mentor.specialization }}
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Pride in Technology Footer -->
+{% include 'partials/pride_footer.html' %}
+
+{% endblock %}

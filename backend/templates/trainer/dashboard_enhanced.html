@@ -1,0 +1,552 @@
+{% extends "trainer/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Trainer Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .stat-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  }
+  /* chart card */
+  .chart-card {
+    background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.07);
+    border:1px solid #e5e7eb;overflow:hidden;
+    transition:transform .2s,box-shadow .2s;
+  }
+  .chart-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.11);}
+  .chart-head{padding:14px 20px 12px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;}
+  .chart-head h3{font-size:14px;font-weight:700;color:#111827;margin:0;display:flex;align-items:center;gap:7px;}
+  .chart-head .csub{font-size:11.5px;color:#9ca3af;}
+  .chart-body{padding:16px 18px 18px;}
+  .chart-body canvas{max-height:210px;}
+  /* donut center */
+  .donut-wrap{position:relative;display:flex;align-items:center;justify-content:center;}
+  .donut-center{position:absolute;text-align:center;pointer-events:none;}
+  .donut-center strong{display:block;font-size:24px;font-weight:800;color:#111827;line-height:1;}
+  .donut-center span{font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
+  /* legend */
+  .leg-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .leg-pill{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:#6b7280;}
+  .leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  /* mini stats */
+  .amini-row{display:flex;border-top:1px solid #f3f4f6;margin-top:14px;}
+  .amini{flex:1;text-align:center;padding:10px 6px;border-right:1px solid #f3f4f6;}
+  .amini:last-child{border-right:none;}
+  .amini strong{display:block;font-size:18px;font-weight:800;color:#111827;line-height:1;}
+  .amini span{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+  /* section label */
+  .sec-label{font-size:11px;font-weight:700;color:#6b7280;letter-spacing:.1em;text-transform:uppercase;
+    margin:0 0 14px;display:flex;align-items:center;gap:8px;}
+  .sec-label::after{content:'';flex:1;height:1px;background:#e5e7eb;}
+  /* workload KPI ribbon */
+  .kpi-ribbon{
+    background:#fff;border:1px solid #e5e7eb;border-radius:16px;
+    box-shadow:0 2px 10px rgba(15,23,42,.05);overflow:hidden;
+  }
+  .kpi-ribbon-grid{
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+  .kpi-cell{
+    position:relative;padding:22px 20px 20px;text-decoration:none;color:inherit;
+    transition:background .18s ease;
+  }
+  .kpi-cell:not(:last-child)::after{
+    content:'';position:absolute;top:18px;right:0;bottom:18px;width:1px;background:#f1f5f9;
+  }
+  .kpi-cell:hover{background:#fafafa;}
+  .kpi-cell.is-link{cursor:pointer;}
+  .kpi-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .kpi-icon{
+    width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-size:15px;
+  }
+  .kpi-value{font-size:30px;font-weight:800;line-height:1;letter-spacing:-.03em;color:#0f172a;}
+  .kpi-label{margin-top:8px;font-size:12px;font-weight:700;color:#334155;letter-spacing:.02em;}
+  .kpi-hint{margin-top:3px;font-size:11px;color:#94a3b8;font-weight:500;}
+  .kpi-bar{height:4px;border-radius:999px;background:#f1f5f9;margin-top:14px;overflow:hidden;}
+  .kpi-bar > span{display:block;height:100%;border-radius:999px;}
+  .kpi-foot{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:12px 20px;border-top:1px solid #f1f5f9;background:#fafafa;
+  }
+  .kpi-foot-text{font-size:12px;color:#64748b;font-weight:500;}
+  .kpi-foot a{
+    font-size:12px;font-weight:700;color:#7c3aed;text-decoration:none;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .kpi-foot a:hover{color:#6d28d9;}
+  .action-tile{
+    display:flex;align-items:center;gap:16px;padding:18px 20px;
+    background:#fff;border:1px solid #e5e7eb;border-radius:16px;
+    box-shadow:0 2px 10px rgba(15,23,42,.05);text-decoration:none;color:inherit;
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .action-tile:hover{
+    transform:translateY(-2px);box-shadow:0 10px 24px rgba(15,23,42,.08);
+    border-color:#ddd6fe;
+  }
+  .action-tile-icon{
+    width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    font-size:18px;flex-shrink:0;
+  }
+  .action-tile-body{flex:1;min-width:0;}
+  .action-tile-value{font-size:26px;font-weight:800;line-height:1;color:#0f172a;letter-spacing:-.02em;}
+  .action-tile-label{margin-top:4px;font-size:13px;font-weight:700;color:#334155;}
+  .action-tile-hint{margin-top:2px;font-size:11px;color:#94a3b8;}
+  .action-tile-go{
+    width:34px;height:34px;border-radius:999px;background:#f8fafc;border:1px solid #e2e8f0;
+    display:flex;align-items:center;justify-content:center;color:#64748b;flex-shrink:0;
+    transition:background .15s,color .15s;
+  }
+  .action-tile:hover .action-tile-go{background:#7c3aed;border-color:#7c3aed;color:#fff;}
+  @media (max-width:900px){
+    .kpi-ribbon-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .kpi-cell:nth-child(2)::after{display:none;}
+    .kpi-cell:nth-child(1),.kpi-cell:nth-child(2){border-bottom:1px solid #f1f5f9;}
+  }
+  @media (max-width:560px){
+    .kpi-ribbon-grid{grid-template-columns:1fr;}
+    .kpi-cell:not(:last-child)::after{display:none;}
+    .kpi-cell{border-bottom:1px solid #f1f5f9;}
+    .kpi-cell:last-child{border-bottom:none;}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="bg-gray-50 min-h-screen p-6">
+
+  <!-- Header Section -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Welcome back, {{ current_user.full_name if current_user and current_user.full_name else 'Trainer' }}!</h1>
+    <p class="text-gray-600">{{ current_month or '' }} &nbsp;·&nbsp;
+      {% if stats.pending %}
+        <span class="text-orange-600 font-semibold">{{ stats.pending }} assessment{{ 's' if stats.pending != 1 else '' }} awaiting review</span>
+      {% else %}
+        <span class="text-green-600 font-semibold">Review queue is clear — great work!</span>
+      {% endif %}
+    </p>
+  </div>
+
+  <!-- Workload Snapshot -->
+  {% set _total = stats.total or 0 %}
+  {% set _pending = stats.pending or 0 %}
+  {% set _approved = stats.approved or 0 %}
+  {% set _rejected = stats.rejected or 0 %}
+  {% set _p_pct = ((_pending / _total * 100)|round|int) if _total > 0 else 0 %}
+  {% set _a_pct = ((_approved / _total * 100)|round|int) if _total > 0 else 0 %}
+  {% set _r_pct = ((_rejected / _total * 100)|round|int) if _total > 0 else 0 %}
+
+  <div class="sec-label"><i class="fas fa-briefcase text-slate-500"></i> Workload Snapshot</div>
+
+  <div class="kpi-ribbon mb-5">
+    <div class="kpi-ribbon-grid">
+      <div class="kpi-cell">
+        <div class="kpi-top">
+          <div class="kpi-icon" style="background:#f3e8ff;color:#7c3aed"><i class="fas fa-layer-group"></i></div>
+        </div>
+        <div class="kpi-value">{{ _total }}</div>
+        <div class="kpi-label">Total Assessments</div>
+        <div class="kpi-hint">All trainee POE submissions</div>
+        <div class="kpi-bar"><span style="width:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></span></div>
+      </div>
+
+      <a class="kpi-cell is-link" href="/trainer/assessments">
+        <div class="kpi-top">
+          <div class="kpi-icon" style="background:#fff7ed;color:#ea580c"><i class="fas fa-hourglass-half"></i></div>
+          {% if _pending %}<span style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#ea580c;background:#ffedd5;padding:3px 8px;border-radius:999px">Action</span>{% endif %}
+        </div>
+        <div class="kpi-value" style="color:#c2410c">{{ _pending }}</div>
+        <div class="kpi-label">Pending Review</div>
+        <div class="kpi-hint">Awaiting your decision</div>
+        <div class="kpi-bar"><span style="width:{{ _p_pct }}%;background:linear-gradient(90deg,#f59e0b,#fb923c)"></span></div>
+      </a>
+
+      <div class="kpi-cell">
+        <div class="kpi-top">
+          <div class="kpi-icon" style="background:#ecfdf5;color:#059669"><i class="fas fa-check-circle"></i></div>
+        </div>
+        <div class="kpi-value" style="color:#047857">{{ _approved }}</div>
+        <div class="kpi-label">Approved</div>
+        <div class="kpi-hint">{{ _a_pct }}% of all submissions</div>
+        <div class="kpi-bar"><span style="width:{{ _a_pct }}%;background:linear-gradient(90deg,#10b981,#34d399)"></span></div>
+      </div>
+
+      <a class="kpi-cell is-link" href="/trainer/assessments">
+        <div class="kpi-top">
+          <div class="kpi-icon" style="background:#fef2f2;color:#dc2626"><i class="fas fa-undo-alt"></i></div>
+        </div>
+        <div class="kpi-value" style="color:#b91c1c">{{ _rejected }}</div>
+        <div class="kpi-label">Returned</div>
+        <div class="kpi-hint">Needs trainee revision</div>
+        <div class="kpi-bar"><span style="width:{{ _r_pct }}%;background:linear-gradient(90deg,#ef4444,#f87171)"></span></div>
+      </a>
+    </div>
+
+    <div class="kpi-foot">
+      <div class="kpi-foot-text">
+        {% if _pending %}
+          Focus on the review queue first — {{ _pending }} file{{ 's' if _pending != 1 else '' }} still open.
+        {% else %}
+          POE review queue is clear. Keep Marks Entry and attendance up to date.
+        {% endif %}
+      </div>
+      <a href="/trainer/assessments">Open Trainee POE Review <i class="fas fa-arrow-right"></i></a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <a class="action-tile" href="/academic-trips">
+      <div class="action-tile-icon" style="background:#f0fdfa;color:#0f766e"><i class="fas fa-bus"></i></div>
+      <div class="action-tile-body">
+        <div class="action-tile-value">{{ stats.trips_uploaded or 0 }}</div>
+        <div class="action-tile-label">My Trip Reports</div>
+        <div class="action-tile-hint">Academic trips uploaded by you</div>
+      </div>
+      <div class="action-tile-go"><i class="fas fa-chevron-right text-xs"></i></div>
+    </a>
+
+    <a class="action-tile" href="/clearance/approver">
+      <div class="action-tile-icon" style="background:#eff6ff;color:#2563eb"><i class="fas fa-clipboard-check"></i></div>
+      <div class="action-tile-body">
+        <div class="action-tile-value">{{ stats.clearance_pending or 0 }}</div>
+        <div class="action-tile-label">Clearance Pending</div>
+        <div class="action-tile-hint">Approvals waiting on you</div>
+      </div>
+      <div class="action-tile-go"><i class="fas fa-chevron-right text-xs"></i></div>
+    </a>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       ANALYTICS SECTION — Charts & graphs
+       ═══════════════════════════════════════════════ -->
+
+  <div class="sec-label mb-4"><i class="fas fa-chart-bar text-purple-600"></i> Performance Analytics</div>
+
+  <!-- Row 1: Assessment donut · 7-day attendance trend · Attendance rate per unit -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+
+    <!-- Assessment status donut -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <h3><i class="fas fa-file-alt" style="color:#9333ea"></i> Assessment Status</h3>
+        <span class="csub">{{ stats.total or 0 }} total</span>
+      </div>
+      <div class="chart-body">
+        <div class="donut-wrap" style="height:170px">
+          <canvas id="tcAssess"></canvas>
+          <div class="donut-center">
+            <strong>{{ stats.total or 0 }}</strong>
+            <span>Total</span>
+          </div>
+        </div>
+        <div class="leg-row">
+          <div class="leg-pill"><div class="leg-dot" style="background:#f59e0b"></div>Pending <strong style="color:#111827;margin-left:3px">{{ stats.pending or 0 }}</strong></div>
+          <div class="leg-pill"><div class="leg-dot" style="background:#10b981"></div>Approved <strong style="color:#111827;margin-left:3px">{{ stats.approved or 0 }}</strong></div>
+          <div class="leg-pill"><div class="leg-dot" style="background:#ef4444"></div>Returned <strong style="color:#111827;margin-left:3px">{{ stats.rejected or 0 }}</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7-day attendance trend -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <h3><i class="fas fa-calendar-check" style="color:#10b981"></i> 7-Day Attendance</h3>
+        <span class="csub">My units · last 7 days</span>
+      </div>
+      <div class="chart-body">
+        <canvas id="tcTrend" style="max-height:195px"></canvas>
+      </div>
+    </div>
+
+    <!-- Attendance rate per unit (progress bars) -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <h3><i class="fas fa-users" style="color:#3b82f6"></i> Attendance by Unit</h3>
+        <span class="csub">Presence rate</span>
+      </div>
+      <div class="chart-body" style="padding:14px 16px 16px">
+        {% set att_lbls  = att_unit_labels  | from_json if att_unit_labels  else [] %}
+        {% set att_pres  = att_unit_present | from_json if att_unit_present else [] %}
+        {% set att_abs   = att_unit_absent  | from_json if att_unit_absent  else [] %}
+        {% if att_lbls %}
+          {% for i in range(att_lbls|length) %}
+          {% set tot = (att_pres[i]|int) + (att_abs[i]|int) %}
+          {% set pct = ((att_pres[i]|int / tot * 100)|round|int) if tot > 0 else 0 %}
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-size:12px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px" title="{{ att_lbls[i] }}">{{ att_lbls[i] }}</span>
+              <span style="font-size:11px;font-weight:700;color:#6b7280;flex-shrink:0;margin-left:6px">{{ pct }}%</span>
+            </div>
+            <div style="height:7px;background:#f3f4f6;border-radius:999px;overflow:hidden">
+              <div style="height:100%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:999px;width:{{ pct }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div style="text-align:center;padding:36px 0;color:#9ca3af;font-size:13px">
+            <i class="fas fa-calendar-times" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4"></i>
+            No attendance data yet
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Row 2: Assessments per unit grouped bar (full width) -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+    <div class="chart-card">
+      <div class="chart-head">
+        <h3><i class="fas fa-layer-group" style="color:#8b5cf6"></i> Assessments per Unit</h3>
+        <span class="csub">Pending · Approved · Returned</span>
+      </div>
+      <div class="chart-body">
+        <canvas id="tcAssUnit" style="max-height:220px"></canvas>
+      </div>
+    </div>
+
+    <!-- Approval rate summary card -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <h3><i class="fas fa-chart-pie" style="color:#f59e0b"></i> Approval Rate</h3>
+        <span class="csub">This trainer</span>
+      </div>
+      <div class="chart-body">
+        {% set total = stats.total or 0 %}
+        {% set approved = stats.approved or 0 %}
+        {% set pct = ((approved / total * 100)|round|int) if total > 0 else 0 %}
+        <div style="text-align:center;padding:12px 0 8px">
+          <div style="font-size:52px;font-weight:900;color:#111827;line-height:1;font-family:'Poppins',sans-serif">{{ pct }}<span style="font-size:24px;color:#9ca3af">%</span></div>
+          <div style="font-size:12px;color:#6b7280;font-weight:600;margin-top:6px;text-transform:uppercase;letter-spacing:.06em">Approval Rate</div>
+          <div style="background:#f3f4f6;border-radius:999px;height:10px;overflow:hidden;margin:14px 0 12px">
+            <div style="background:linear-gradient(90deg,#10b981,#34d399);height:100%;border-radius:999px;width:{{ pct }}%;transition:width .8s"></div>
+          </div>
+        </div>
+        <div class="amini-row">
+          <div class="amini"><strong style="color:#f59e0b">{{ stats.pending or 0 }}</strong><span>Pending</span></div>
+          <div class="amini"><strong style="color:#10b981">{{ stats.approved or 0 }}</strong><span>Approved</span></div>
+          <div class="amini"><strong style="color:#ef4444">{{ stats.rejected or 0 }}</strong><span>Returned</span></div>
+          <div class="amini"><strong>{{ total }}</strong><span>Total</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <!-- ═══════════════ END ANALYTICS ═══════════════ -->
+
+  <!-- Inline Unread Notifications -->
+  {% if unread_notifications %}
+  <div class="bg-white rounded-xl shadow-sm mb-8 border border-purple-100">
+    <div class="px-6 py-4 border-b border-purple-50 flex items-center justify-between">
+      <h2 class="text-lg font-bold text-gray-900">
+        <i class="fas fa-bell text-purple-600 mr-2"></i>New Notifications
+        <span class="inline-block bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full ml-2">{{ unread_notifications|length }}</span>
+      </h2>
+      <form action="/notifications/mark-all-read" method="post" style="display:inline">
+        <button type="submit" class="text-purple-600 hover:text-purple-700 text-sm font-semibold">
+          Mark all read <i class="fas fa-check-double ml-1"></i>
+        </button>
+      </form>
+    </div>
+    <ul class="divide-y divide-gray-50">
+      {% for n in unread_notifications %}
+      {% set icon_map = {'info':'info-circle','success':'check-circle','warning':'exclamation-triangle','error':'exclamation-circle'} %}
+      {% set color_map = {'info':'blue','success':'green','warning':'yellow','error':'red'} %}
+      {% set c = color_map.get(n.type, 'blue') %}
+      <li class="px-6 py-4 flex items-start gap-4 hover:bg-purple-50 transition">
+        <div class="w-9 h-9 rounded-full bg-{{ c }}-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i class="fas fa-{{ icon_map.get(n.type, 'info-circle') }} text-{{ c }}-600 text-sm"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900">{{ n.title }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">{{ n.message }}</p>
+        </div>
+        {% if n.action_url %}
+        <a href="{{ n.action_url }}" class="text-purple-600 hover:text-purple-800 text-xs font-semibold flex-shrink-0 mt-1">
+          View <i class="fas fa-arrow-right ml-0.5"></i>
+        </a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="px-6 py-3 border-t border-gray-50 text-right">
+      <a href="/notifications" class="text-purple-600 hover:text-purple-700 text-sm font-semibold">
+        View all notifications <i class="fas fa-arrow-right ml-1"></i>
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Pending Assessments Table -->
+  <div class="bg-white rounded-xl shadow-sm mb-8 border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-lg font-bold text-gray-900">
+        <i class="fas fa-clock text-orange-600 mr-2"></i>Pending Assessments
+        {% if pending_assessments %}
+        <span class="inline-block bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full ml-2">{{ pending_assessments|length }}</span>
+        {% endif %}
+      </h2>
+      <a href="/trainer/assessments" class="text-purple-600 hover:text-purple-700 text-sm font-semibold">
+        View All <i class="fas fa-arrow-right ml-1"></i>
+      </a>
+    </div>
+    {% if pending_assessments %}
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Student</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Unit</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Class</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Uploaded</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for a in pending_assessments %}
+          <tr class="hover:bg-gray-50 transition">
+            <td class="px-6 py-4">
+              <div>
+                <p class="text-sm font-medium text-gray-900">{{ a.get('user_profiles',{}).get('full_name','—') }}</p>
+                <p class="text-xs text-gray-500">{{ a.get('user_profiles',{}).get('admission_no','') }}</p>
+              </div>
+            </td>
+            <td class="px-6 py-4">
+              <span class="text-sm text-gray-900">{{ a.get('units',{}).get('name','—') }}</span>
+            </td>
+            <td class="px-6 py-4">
+              <span class="text-sm text-gray-900">{{ a.get('classes',{}).get('name','—') }}</span>
+            </td>
+            <td class="px-6 py-4">
+              <span class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded">{{ a.get('assessment_type','—') }}</span>
+            </td>
+            <td class="px-6 py-4">
+              <span class="text-sm text-gray-600">{{ a.get('uploaded_at','—')[:10] if a.get('uploaded_at') else '—' }}</span>
+            </td>
+            <td class="px-6 py-4 text-right">
+              <a href="/trainer/assessment/{{ a.id }}/review"
+                 class="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-purple-700 transition inline-flex items-center gap-1">
+                <i class="fas fa-eye"></i> Review
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="px-6 py-12 text-center">
+      <i class="fas fa-clipboard-check text-gray-300 text-5xl mb-4 block"></i>
+      <p class="text-gray-500">No pending assessments. Great job!</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- My Assigned Units -->
+  {% if units_list %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="text-lg font-bold text-gray-900">
+        <i class="fas fa-book text-purple-600 mr-2"></i>My Assigned Units
+        <span class="inline-block bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full ml-2">{{ units_list|length }}</span>
+      </h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Code</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for u in units_list %}
+          <tr class="hover:bg-gray-50 transition">
+            <td class="px-6 py-4">
+              <span class="inline-block bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded">{{ u.code }}</span>
+            </td>
+            <td class="px-6 py-4">
+              <span class="text-sm text-gray-900">{{ u.name }}</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+(function(){
+  const ease = 'easeInOutQuart';
+  const grid = 'rgba(0,0,0,0.04)';
+
+  /* ── Assessment status donut ── */
+  (function(){
+    var ctx = document.getElementById('tcAssess'); if(!ctx) return;
+    new Chart(ctx, {type:'doughnut',
+      data:{labels:['Pending','Approved','Returned'],
+            datasets:[{data:[{{ stats.pending or 0 }},{{ stats.approved or 0 }},{{ stats.rejected or 0 }}],
+              backgroundColor:['#f59e0b','#10b981','#ef4444'],
+              borderWidth:3, borderColor:'#fff', hoverBorderWidth:4}]},
+      options:{cutout:'72%', plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:c=>' '+c.label+': '+c.raw}}},
+        animation:{duration:800,easing:ease}}});
+  })();
+
+  /* ── 7-day attendance trend ── */
+  (function(){
+    var ctx = document.getElementById('tcTrend'); if(!ctx) return;
+    new Chart(ctx, {type:'line',
+      data:{labels:{{ trend_labels|safe }},
+            datasets:[
+              {label:'Present', data:{{ trend_present|safe }},
+               borderColor:'#10b981', backgroundColor:'rgba(16,185,129,.10)',
+               fill:true, tension:.4, pointBackgroundColor:'#10b981', pointRadius:4, borderWidth:2.5},
+              {label:'Absent', data:{{ trend_absent|safe }},
+               borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.07)',
+               fill:true, tension:.4, pointBackgroundColor:'#ef4444', pointRadius:4, borderWidth:2.5}
+            ]},
+      options:{responsive:true, maintainAspectRatio:true,
+        plugins:{legend:{position:'top',labels:{font:{size:11},usePointStyle:true}}},
+        scales:{x:{grid:{color:grid},ticks:{font:{size:10}}},
+                y:{grid:{color:grid},beginAtZero:true,ticks:{stepSize:1,font:{size:10}}}},
+        animation:{duration:900,easing:ease}}});
+  })();
+
+  /* ── Assessments per unit grouped bar ── */
+  (function(){
+    var ctx = document.getElementById('tcAssUnit'); if(!ctx) return;
+    new Chart(ctx, {type:'bar',
+      data:{labels:{{ assess_unit_labels|safe }},
+            datasets:[
+              {label:'Pending',  data:{{ assess_unit_pending|safe }},  backgroundColor:'rgba(245,158,11,.80)', borderColor:'#f59e0b', borderWidth:1.5, borderRadius:5},
+              {label:'Approved', data:{{ assess_unit_approved|safe }}, backgroundColor:'rgba(16,185,129,.80)', borderColor:'#10b981', borderWidth:1.5, borderRadius:5},
+              {label:'Returned', data:{{ assess_unit_rejected|safe }}, backgroundColor:'rgba(239,68,68,.75)',  borderColor:'#ef4444', borderWidth:1.5, borderRadius:5}
+            ]},
+      options:{responsive:true, maintainAspectRatio:true,
+        plugins:{legend:{position:'top',labels:{font:{size:11},usePointStyle:true}},
+          tooltip:{mode:'index',intersect:false}},
+        scales:{x:{grid:{display:false},ticks:{font:{size:11}}},
+                y:{grid:{color:grid},beginAtZero:true,ticks:{font:{size:11}}}},
+        animation:{duration:900,easing:ease}}});
+  })();
+
+})();
+</script>
+
+<!-- Pride in Technology Footer -->
+{% include 'partials/pride_footer.html' %}
+
+{% endblock %}

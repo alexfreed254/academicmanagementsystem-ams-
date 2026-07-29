@@ -30,9 +30,10 @@ Existing Jinja portals remain available. This SPA is migrated incrementally
 
 ## Local development
 
-1. Start Flask API (repo root):
+1. Start Flask API (`backend/`):
 
 ```bash
+cd backend
 pip install -r requirements.txt
 flask --app app run -p 5000
 ```
@@ -56,7 +57,7 @@ Copy `.env.example` to `.env`:
 | `VITE_LEGACY_ORIGIN` | Flask origin for not-yet-migrated pages |
 | `VITE_SOCKET_URL` | Optional Socket.IO server |
 
-Flask side (repo root `.env`):
+Flask side (`backend/.env`):
 
 | Variable | Purpose |
 |---|---|

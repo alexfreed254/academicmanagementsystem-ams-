@@ -7,9 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "oxlint",
-    "deploy": "npm run build && wrangler pages deploy dist",
-    "deploy:preview": "npm run build && wrangler pages deploy dist --branch=preview"
+    "lint": "oxlint"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",

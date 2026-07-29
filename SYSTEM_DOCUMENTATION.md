@@ -37,8 +37,8 @@ TTTI AMS is a full-stack institutional platform that digitises academic and admi
 | Item | Detail |
 |---|---|
 | Repository | `THIKA-TECHNICAL-ACADEMIC-MANAGEMENT-SYSTEM` |
-| Backend entry | `app.py` → Gunicorn `app:app` |
-| Primary UI | Server-rendered Jinja2 templates under `templates/` |
+| Backend entry | `backend/app.py` → Gunicorn `gunicorn --chdir backend app:app` |
+| Primary UI | Server-rendered Jinja2 templates under `backend/templates/` |
 | Secondary UI | React 18 + Vite SPA under `frontend/` (talks to `/api/v1`) |
 | Database | Supabase PostgreSQL (+ RLS policies) |
 | Auth (staff) | Supabase Auth (email + password → JWT) |
@@ -110,7 +110,7 @@ openpyxl, pillow, email-validator, reportlab
 
 ## 5. Application structure
 
-### 5.1 Important root modules
+### 5.1 Important backend modules (`backend/`)
 
 | File | Role |
 |---|---|
@@ -131,18 +131,20 @@ openpyxl, pillow, email-validator, reportlab
 
 ```
 THIKA TECHNICAL ACADEMIC MANAGEMENT SYSTEM/
-├── app.py
-├── auth_utils.py, db.py, extensions.py, security_utils.py, …
-├── routes/                 # Flask blueprints
-├── templates/              # Jinja portals per role
-├── static/                 # CSS, JS (csrf.js, secure-dom.js), assets
+├── backend/                # Flask API + Jinja portals
+│   ├── app.py
+│   ├── auth_utils.py, db.py, extensions.py, security_utils.py, …
+│   ├── routes/             # Flask blueprints
+│   ├── templates/          # Jinja portals per role
+│   ├── static/             # CSS, JS (csrf.js, secure-dom.js), assets
+│   ├── assets/             # Brand images
+│   ├── requirements.txt
+│   └── .env.example
 ├── frontend/               # React + Vite SPA
-├── assets/                 # Brand images
 ├── supabase_schema.sql     # Base schema
 ├── *_migration.sql         # Incremental DB migrations
-├── requirements.txt
 ├── runtime.txt
-├── Procfile / render.yaml
+├── Procfile / render.yaml  # Deploy from repo root → backend
 └── README.md / this document
 ```
 
@@ -551,8 +553,8 @@ Forgot-password self-service for trainees is **disabled** (prevents admission-nu
 ### 13.4 Deploy (Render)
 
 1. Connect GitHub repository.  
-2. Build: `pip install -r requirements.txt`  
-3. Start: `gunicorn app:app` (see `Procfile` / `render.yaml`)  
+2. Build: `pip install -r backend/requirements.txt`  
+3. Start: `gunicorn --chdir backend app:app` (see `Procfile` / `render.yaml`)  
 4. Set env vars in Render dashboard.  
 5. Apply `supabase_schema.sql` + pending `*_migration.sql` on Supabase.  
 6. Create storage buckets and policies.  
@@ -560,9 +562,10 @@ Forgot-password self-service for trainees is **disabled** (prevents admission-nu
 Local run:
 
 ```bash
+cd backend
 pip install -r requirements.txt
 flask --app app run
-# or: python app.py
+# or from repo root: gunicorn --chdir backend app:app
 ```
 
 SPA local:

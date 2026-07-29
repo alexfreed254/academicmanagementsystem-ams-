@@ -12,10 +12,24 @@ export const api: AxiosInstance = axios.create({
   },
 })
 
+let csrfToken: string | null = null
+let csrfPromise: Promise<string> | null = null
+
 async function ensureCsrfToken(): Promise<string> {
-  // Skip CSRF token fetch - Hono's CSRF middleware handles it automatically via headers
-  // The middleware validates the origin header instead of requiring explicit tokens
-  return ''
+  if (csrfToken) return csrfToken
+  if (!csrfPromise) {
+    csrfPromise = api
+      .get('/api/v1/csrf-token')
+      .then((res) => {
+        const body = res.data as { data?: { csrf_token?: string }; csrf_token?: string }
+        csrfToken = body?.data?.csrf_token || body?.csrf_token || ''
+        return csrfToken
+      })
+      .finally(() => {
+        csrfPromise = null
+      })
+  }
+  return csrfPromise
 }
 
 api.interceptors.request.use(async (config) => {
