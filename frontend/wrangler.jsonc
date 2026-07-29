@@ -1,0 +1,23 @@
+/**
+ * Cloudflare Pages config for the TTTI AMS React SPA.
+ *
+ * Dashboard settings (when not using this file as source of truth):
+ *   Root directory: frontend
+ *   Build command:  npm run build
+ *   Build output:   dist
+ *
+ * Deploy locally:
+ *   npm run build
+ *   npx wrangler pages deploy
+ *
+ * Set these in Cloudflare Pages → Settings → Environment variables
+ * (build-time; must be present during `vite build`):
+ *   VITE_API_BASE_URL
+ *   VITE_LEGACY_ORIGIN
+ *   VITE_SOCKET_URL   (optional)
+ */
+{
+  "name": "thikaacademicmanagementsystem",
+  "compatibility_date": "2026-07-29",
+  "pages_build_output_dir": "./dist"
+}
