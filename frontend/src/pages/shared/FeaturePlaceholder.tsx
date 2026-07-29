@@ -1,5 +1,6 @@
 import { PortalShell } from '@/layouts/PortalShell'
 import { Link } from 'react-router-dom'
+import { getLegacyOrigin } from '@/config/legacy'
 
 /**
  * Placeholder for features not yet ported to React.
@@ -12,8 +13,7 @@ export default function FeaturePlaceholder({
   title: string
   legacyPath: string
 }) {
-  const legacyOrigin = (import.meta.env.VITE_LEGACY_ORIGIN as string | undefined) || ''
-  const href = `${legacyOrigin.replace(/\/$/, '')}${legacyPath}`
+  const href = `${getLegacyOrigin()}${legacyPath}`
 
   return (
     <PortalShell title={title}>

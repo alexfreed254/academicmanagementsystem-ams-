@@ -1,13 +1,14 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from '@/providers/AuthProvider'
 import { getPortalNav, getPortalTitle } from '@/config/navigation'
+import { getLegacyOrigin, redirectToLogin } from '@/config/legacy'
 import { fetchRecentNotifications } from '@/api/trainer'
 import clsx from 'clsx'
 
-const legacyBase = (import.meta.env.VITE_LEGACY_ORIGIN as string | undefined) || ''
+const legacyBase = getLegacyOrigin()
 const ZOOM_MIN = 0
 const ZOOM_MAX = 200
 const ZOOM_KEY = 'ttti_zoom'
@@ -44,7 +45,6 @@ export function PortalShell({
   children: ReactNode
 }) {
   const { user, logout } = useAuth()
-  const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [zoomPct, setZoomPct] = useState(() =>
@@ -68,7 +68,7 @@ export function PortalShell({
 
   async function onLogout() {
     await logout()
-    navigate('/login', { replace: true })
+    redirectToLogin()
   }
 
   return (

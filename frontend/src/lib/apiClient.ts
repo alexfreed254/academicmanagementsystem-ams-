@@ -1,4 +1,5 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios'
+import { getLoginUrl } from '@/config/legacy'
 
 const baseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || ''
 
@@ -59,8 +60,9 @@ api.interceptors.response.use(
     const code = error.response?.data?.code
     if (status === 401 || code === 'unauthorized') {
       const path = window.location.pathname
-      if (!path.startsWith('/login')) {
+      if (!path.startsWith('/login') && !path.startsWith('/auth/login')) {
         window.dispatchEvent(new CustomEvent('ttti:session-expired'))
+        window.location.replace(getLoginUrl())
       }
     }
     return Promise.reject(error)
