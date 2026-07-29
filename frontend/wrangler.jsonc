@@ -1,14 +1,15 @@
 /**
- * Cloudflare Pages config for the TTTI AMS React SPA.
+ * Cloudflare static-assets deploy for the TTTI AMS React SPA.
+ *
+ * Matches the Cloudflare dashboard Deploy command:
+ *   npx wrangler deploy
  *
  * Dashboard settings:
  *   Root directory:  frontend
  *   Build command:   npm run build
- *   Deploy command:  npx wrangler pages deploy
- *                    (NOT `wrangler deploy` — that is for Workers)
- *   Build output:    dist  (also set via pages_build_output_dir below)
+ *   Deploy command:  npx wrangler deploy
  *
- * Build-time env vars (Cloudflare → Settings → Variables):
+ * Build-time env vars (Settings → Variables):
  *   VITE_API_BASE_URL
  *   VITE_LEGACY_ORIGIN
  *   VITE_SOCKET_URL   (optional)
@@ -16,5 +17,8 @@
 {
   "name": "thikaacademicmanagementsystem",
   "compatibility_date": "2026-07-29",
-  "pages_build_output_dir": "./dist"
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
 }
